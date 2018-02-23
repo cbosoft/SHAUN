@@ -606,6 +606,8 @@ public class Home extends Activity {
             }
         }
 
+        reBuff.clear();
+
         for (String s: oBuff) {
             shPrint(s);
         }
@@ -630,7 +632,5 @@ public class Home extends Activity {
     *   - When launching "PIXEL LAUNCHER" from SHAUN, bugs out
     *       - "java.lang.NullPointerException: Attempt to invoke virtual method 'boolean android.content.Intent.migrateExtraStreamToClipData()' on a null object reference"
     *       - Just seems to be pixel launcher, not noticed it with other apps (maybe its just for homescreen apps?)
-    *   - Grep sometimes returns multiple results
-    *       - seems to be when results is single item?
     * */
 }

@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static android.content.ContentValues.TAG;
 
@@ -38,10 +39,13 @@ public class Home extends Activity {
     TextClock Clock;
 
     // Shell
-    TextView shSTDOUT;
+    BufferView shSTDOUT;
     EditText shSTDIN;
     String shPrompt;
     String shCurrentDirectory = Environment.getRootDirectory().toString();
+    Boolean redirect = false;
+    ArrayList<String> reBuff = new ArrayList<>(0);
+    String prevCommand = "";
 
     int shBufHist = 1000;
     Map<String, String> ALIASES;
@@ -92,7 +96,7 @@ public class Home extends Activity {
                     return;
                 }
                 else if (s.length() < shPrompt.length()){
-                    resetStdin();
+                    setStdin(shPrompt + prevCommand);
                     return;
                 }
                 else if (count < before){
@@ -105,6 +109,7 @@ public class Home extends Activity {
 
                     // do something with input
                     String entered = ss.substring(shPrompt.length());
+                    prevCommand = entered;
                     int rv = shTabComplete(entered);
                     switch (rv) {
                         case 0: // no match
@@ -159,6 +164,7 @@ public class Home extends Activity {
         input2type.put("clear", 2);
         input2type.put("shset", 2);
         input2type.put("shget", 2);
+        input2type.put("grep", 2);
 
         Log.d(TAG, "SETTING UP ALIASES");
         ALIASES = new HashMap<>();
@@ -361,21 +367,12 @@ public class Home extends Activity {
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     void shPrint(String toPrint) {
-        // Outputs a line to the shell.
-        // If shell is full, cuts off oldest line and adds new line,
-        // otherwise just adds new line to shell.
-        // TODO
-
-        String cur = shSTDOUT.getText().toString(), outp = "";
-        String[] cur_lines = cur.split("\n");
-        int offs = cur_lines.length - shBufHist;
-        if (offs < 0) {offs = 0; }
-        for (int i = offs; i < cur_lines.length; i++) {
-            outp += cur_lines[i] + "\n";
+        if (redirect) {
+            reBuff.add(toPrint);
         }
-        outp += toPrint;
-
-        shSTDOUT.setText(outp);
+        else {
+            shSTDOUT.addToBuffer(toPrint);
+        }
     }
 
     public void shExec(String command, String[] args) {
@@ -389,6 +386,37 @@ public class Home extends Activity {
             startActivity(li);
         }
         else {
+
+            try {
+                for (int i = 0; i < args.length; i++) {
+                    if (args[i].equals("|")) {
+                        if (args[i + 1].equals("grep")) {
+                            // pipe output
+                            String nc = "grep";
+                            String[] na = new String[args.length - 1];
+                            na[0] = args[i + 2]; // pattern
+                            na[1] = command; // command
+
+                            for (int j = 1; j < i; j++) {
+                                Log.d(TAG, "shExec: argsj: " + args[j]);
+                                na[j + 1] = args[j];
+                            }
+
+                            command = nc;
+                            args = na;
+
+                            Log.d(TAG, "shExec: NC: " + nc);
+                            for (String s: na) {
+                                Log.d(TAG, "shExec:  ARGS:  " + s);
+                            }
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Log.d(TAG, "shExec: NOT GREP");
+            }
+
             switch (command) {
                 case "ls":
                     shb_ls(args);
@@ -411,6 +439,13 @@ public class Home extends Activity {
                 case "shget":
                     shb_shget(args);
                     break;
+                case "grep":
+                    shb_grep(args);
+                    break;
+                default:
+                    shPrint("Command " + command + " not found.");
+                    break;
+
             }
         }
     }
@@ -438,16 +473,16 @@ public class Home extends Activity {
         File[] files = directory.listFiles();
 
         String prefx = "";
-        for (int i = 0; i < files.length; i++ ){
+        for (File f: files){
 
-            if (files[i].isDirectory()){
+            if (f.isDirectory()){
                 prefx = " D ";
             }
             else {
                 prefx = " F ";
             }
 
-            shPrint(prefx + files[i].getName());
+            shPrint(prefx + f.getName());
         }
 
     }
@@ -545,15 +580,43 @@ public class Home extends Activity {
         }
     }
 
+    void shb_grep(String[] args) {
+
+        // grep <pattern> <command> <*args>
+
+        String[] sArgs;
+
+        if (args.length > 2) {
+            sArgs = new String[args.length - 2];
+            System.arraycopy(args, 2, sArgs, 0, args.length - 2);
+        }
+        else {
+            sArgs = null;
+        }
+
+        redirect = true;
+        shExec(args[1], sArgs);
+        redirect = false;
+
+        ArrayList<String> oBuff = new ArrayList<>(0);
+
+        for (String s: reBuff) {
+            if (Pattern.compile(args[0]).matcher(s).find()) {
+                oBuff.add(s);
+            }
+        }
+
+        for (String s: oBuff) {
+            shPrint(s);
+        }
+    }
+
     /*
-    * Apps to implement:
+    * Features to implement:
     *
-    *   - apm: Android Package Manager: uninstall apps
-    *   - pkg-list: list currently installed apps
-    *   - grep: implementation might be tricky...
-    *       maybe a redirect check in shPrint(s)?
-    *       or, a regex/glob pattern! then shPrint can
-    *       output the results of the regex/glob
+    *   - input history
+    *       - as per usual, accessible via the up/down arrow keys
+    *       - on mobile, or with limited keyboard, previous command accessible by pressing backspace at an empty prompt
     *   - extend reach of settings apps:
     *       - theming
     *       - fontsize
@@ -567,5 +630,7 @@ public class Home extends Activity {
     *   - When launching "PIXEL LAUNCHER" from SHAUN, bugs out
     *       - "java.lang.NullPointerException: Attempt to invoke virtual method 'boolean android.content.Intent.migrateExtraStreamToClipData()' on a null object reference"
     *       - Just seems to be pixel launcher, not noticed it with other apps (maybe its just for homescreen apps?)
+    *   - Grep sometimes returns multiple results
+    *       - seems to be when results is single item?
     * */
 }

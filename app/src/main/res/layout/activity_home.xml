@@ -45,7 +45,7 @@
         android:textColor="@color/colorText"
         android:textSize="8pt"
         android:backgroundTint="#00000000"/>
-    <TextView
+    <cbosoft.shaun.BufferView
         android:id="@+id/shSTDOUT"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

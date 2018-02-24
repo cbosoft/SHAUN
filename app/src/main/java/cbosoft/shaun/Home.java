@@ -10,9 +10,16 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
+import android.renderscript.ScriptGroup;
 import android.text.Editable;
+import android.text.Layout;
 import android.text.TextWatcher;
 import android.text.method.ScrollingMovementMethod;
+import android.transition.AutoTransition;
+import android.transition.Scene;
+import android.transition.Transition;
+import android.transition.TransitionManager;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -22,7 +29,6 @@ import android.widget.TextClock;
 import android.os.Build;
 
 import java.io.File;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,17 +43,20 @@ public class Home extends Activity {
     // UI
     TextView devInfo;
     TextClock Clock;
+    ViewGroup rootScene;
+    Scene mainScene, hiddenScene;
+    Transition t = new AutoTransition();
+    boolean hidden = true, devmode = false;
 
     // Shell
     BufferView shSTDOUT;
-    EditText shSTDIN;
+    InputBuffer shSTDIN;
     String shPrompt;
     String shCurrentDirectory = Environment.getRootDirectory().toString();
     Boolean redirect = false;
     ArrayList<String> reBuff = new ArrayList<>(0);
     String prevCommand = "";
 
-    int shBufHist = 1000;
     Map<String, String> ALIASES;
     Map<String, Integer> input2type;
     Map<String, String> input2andrapp;
@@ -55,99 +64,157 @@ public class Home extends Activity {
     SharedPreferences shPref;
     SharedPreferences.Editor shPrefEditor;
 
+    TextWatcher tWatcher = new TextWatcher() {
+        @Override
+        public void afterTextChanged(Editable s) {
+        }
+
+        @Override
+        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+        }
+
+        @Override
+        public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            if (s.length() < 1) {
+                return;
+            }
+            else if (s.length() < shPrompt.length()){
+                setStdin(shPrompt + prevCommand);
+                return;
+            }
+            else if (count < before){
+                return;
+            }
+            char c = s.charAt(start);
+            if (c == '\n') {
+                String ss = s.toString().replaceAll("\n", "");
+                setStdin(ss);
+
+                // do something with input
+                String entered = ss.substring(shPrompt.length());
+                prevCommand = entered;
+
+                if (entered.startsWith("!devc_") && devmode) {
+                    switch (entered) {
+                        default:
+                            shPrint("Unrecognised dev command: " + entered);
+                            break;
+                    }
+                    return;
+                }
+                int rv = shTabComplete(entered);
+                if (rv != 1) shUnimPrint(ss);
+                switch (rv) {
+                    case 0: // no match
+                        shPrint(entered + ": command not found");
+                        resetStdin();
+                        break;
+                    case 1: // partial match
+                        // stdin is updated in 'shTabComplete'
+                        // do nothing here
+                        break;
+                    case 2: // total match
+                        // execute!
+                        if (!entered.contains(" ")) {
+                            shExec(entered, null);
+                        }
+                        else {
+                            String command = entered.substring(0, entered.indexOf(" "));
+                            String[] args = entered.substring(entered.indexOf(" ")).split(" ");
+                            shExec(command, args);
+                        }
+                        break;
+                    case 3: // total match
+                        // execute!
+                        shExec(entered, null);
+                        break;
+                }
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_home);
+        setContentView(R.layout.rootlayout);
         this.hideStatusBar();
 
-        Log.d(TAG, "SETTING UP SHAREDPREFS");
+        View v = findViewById(R.id.shSTDOUT);
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        int height = displayMetrics.heightPixels;
+        v.getLayoutParams().height = height / 2;
+
+        setupPreferences();
+        setupLayout();
+        setupAppMaps();
+        setupScenes();
+        setSubInfo();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        this.shPrompt = getPrompt();
+        this.resetStdin();
+        setSubInfo();
+    }
+
+    @Override
+    protected void onPause(){
+        super.onPause();
+        setHidden(true);
+    }
+
+    void setHidden(boolean state) {
+
+        if (state) {
+            Log.d(TAG, "setHidden: HIDING");
+            TransitionManager.go(hiddenScene, t);
+        }
+        else {
+            Log.d(TAG, "setHidden: SHOWING");
+            TransitionManager.go(mainScene, t);
+        }
+
+
+        hidden = state;
+        setupLayout();
+        setSubInfo();
+        shSTDOUT.invalidate();
+    }
+
+    void setupPreferences() {
+        Log.i(TAG, "SETTING UP PREFERENCES");
         shPref = getPreferences(MODE_PRIVATE);
         shPrefEditor = shPref.edit();
         defaultiseShPref("uname", "user");
         defaultiseShPref("hname", "droid");
-//        defaultiseShPref("uname", "user");
-//        defaultiseShPref("uname", "user");
-//        defaultiseShPref("uname", "user");
-//        defaultiseShPref("uname", "user");
-//        defaultiseShPref("uname", "user");
+        shPrefEditor.apply();
+        shPrefEditor = null;
+    }
 
-        this.shPrompt = getPrompt();
-
+    void setupLayout() {
+        Log.i(TAG, "SETTING UP LAYOUT");
         shSTDOUT = findViewById(R.id.shSTDOUT);
         shSTDIN = findViewById(R.id.shSTDIN);
         devInfo = findViewById(R.id.subinf);
         Clock = findViewById(R.id.shlock);
-
         shSTDOUT.setMovementMethod(new ScrollingMovementMethod());
-
-        TextWatcher tWatcher = new TextWatcher() {
-            @Override
-            public void afterTextChanged(Editable s) {
-            }
-
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (s.length() < 1) {
-                    return;
-                }
-                else if (s.length() < shPrompt.length()){
-                    setStdin(shPrompt + prevCommand);
-                    return;
-                }
-                else if (count < before){
-                    return;
-                }
-                char c = s.charAt(start);
-                if (c == '\n') {
-                    String ss = s.toString().replaceAll("\n", "");
-                    setStdin(ss);
-
-                    // do something with input
-                    String entered = ss.substring(shPrompt.length());
-                    prevCommand = entered;
-                    int rv = shTabComplete(entered);
-                    switch (rv) {
-                        case 0: // no match
-                            shPrint(s.toString());
-                            shPrint(entered + ": command not found");
-                            resetStdin();
-                            break;
-                        case 1: // partial match
-                            // stdin is updated in 'shTabComplete'
-                            // do nothing here
-                            break;
-                        case 2: // total match
-                            // execute!
-                            shPrint(ss);
-                            if (!entered.contains(" ")) {
-                                shExec(entered, null);
-                            }
-                            else {
-                                String command = entered.substring(0, entered.indexOf(" "));
-                                String[] args = entered.substring(entered.indexOf(" ")).split(" ");
-                                shExec(command, args);
-                            }
-                            break;
-                        case 3: // total match
-                            // execute!
-                            shPrint(ss);
-                            shExec(entered, null);
-                            break;
-                    }
-                }
-            }
-        };
+        shPrompt = getPrompt();
+        shSTDIN.setText(shPrompt);
         shSTDIN.addTextChangedListener(tWatcher);
+
+        shSTDIN.requestFocus();
 
         // Set font
         Typeface inc = Typeface.createFromAsset(getAssets(), "fonts/inconsolata.ttf");
         setDefaultTypeface(inc);
+    }
 
+    void setupAppMaps() {
+        Log.i(TAG, "SETTING UP APP MAPS");
         // Get list of installed apps:
         List<ApplicationInfo> lApps;
         lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
@@ -162,6 +229,8 @@ public class Home extends Activity {
         input2type.put("help", 2);
         input2type.put("cd", 2);
         input2type.put("clear", 2);
+        input2type.put("hide", 2);
+        input2type.put("show", 2);
         input2type.put("shset", 2);
         input2type.put("shget", 2);
         input2type.put("grep", 2);
@@ -171,6 +240,7 @@ public class Home extends Activity {
         // android apps
         ALIASES.put("play", "google play store");
         ALIASES.put("amazon", "amazon shopping");
+        ALIASES.put("fm", "file manager");
         ALIASES.put("ukp", "url https://www.reddit.com/r/ukpolitics");
         // builtins
         ALIASES.put("cls", "clear");
@@ -180,18 +250,14 @@ public class Home extends Activity {
             input2andrapp.put(ai.loadLabel(getPackageManager()).toString().toLowerCase(), ai.packageName);
             input2type.put(ai.loadLabel(getPackageManager()).toString().toLowerCase(), 1);
         }
-
-
-
-        setSubInfo();
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        this.shPrompt = getPrompt();
-        this.resetStdin();
-        setSubInfo();
+    void setupScenes() {
+        Log.i(TAG, "SETTING UP SCENES");
+        // init scenes
+        rootScene = findViewById(R.id.root);
+        hiddenScene = Scene.getSceneForLayout(rootScene, R.layout.hidden, this);
+        mainScene = Scene.getSceneForLayout(rootScene, R.layout.main, this);
     }
 
     int shTabComplete(String entered) {
@@ -219,16 +285,16 @@ public class Home extends Activity {
             return 1;
         }
 
-        Object res = input2type.get(command.toLowerCase());
+        Object res = input2type.get(entered.toLowerCase());
         if (res != null) {
-            // android app or built in app, with args
-            return 2;
+            // android app or built in app, no args, command contains " "
+            return 3;
         }
 
-        res = input2type.get(entered.toLowerCase());
+        res = input2type.get(command.toLowerCase());
         if (res != null) {
-            // android app or built in app, no args
-            return 3;
+            // android app or built in app, with args, command contains no " "
+            return 2;
         }
 
 
@@ -239,7 +305,7 @@ public class Home extends Activity {
                 return 2;
             }
             else {
-                String sub_entered = "";
+                String sub_entered;
                 for (int j = 0; j < entered.length(); j++) {
                     sub_entered = entered.substring(0, entered.length() - j).toLowerCase();
                     Log.d(TAG, "shTabComplete: " + sub_entered);
@@ -278,16 +344,23 @@ public class Home extends Activity {
 
     void defaultiseShPref(String key, String defval){
         String res = shPref.getString(key, "unset");
-        if (res == "unset") {
-            shPrefEditor.putString(key, defval);
-            shPrefEditor.commit();
+        if (res.equals("unset")) {
+            if (shPrefEditor != null) {
+                // editor already made: bulk changes
+                shPrefEditor.putString(key, defval);
+            }
+            else {
+                // no editor: remake here
+                shPrefEditor = shPref.edit();
+                shPrefEditor.putString(key, defval);
+                shPrefEditor.apply();
+            }
         }
     }
 
     void setSubInfo(){
         PackageInfo pInfo;
         String version = "vXX";
-        int code = -1;
         try {
             pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
             version = pInfo.versionName;
@@ -318,7 +391,7 @@ public class Home extends Activity {
             }
             catch (Exception e) {
                 try{
-                    EditText et = (EditText) v1;
+                    InputBuffer et = (InputBuffer) v1;
                     et.setTypeface(tf);
                 }
                 catch (Exception ee){
@@ -345,8 +418,9 @@ public class Home extends Activity {
     }
 
     public String getPrompt(){
-        return shPref.getString("uname", getResources().getString(R.string.uname)) + "@" +
-                shPref.getString("hname", getResources().getString(R.string.hname)) + "> ";
+        String shprompt = shPref.getString("uname", getResources().getString(R.string.uname)) + "@" + shPref.getString("hname", getResources().getString(R.string.hname)) + "> ";
+        shSTDIN.minSel = shprompt.length();
+        return shprompt;
     }
 
     String[] trimArr(String[] toTrim) {
@@ -367,10 +441,19 @@ public class Home extends Activity {
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     void shPrint(String toPrint) {
+        shPrint(toPrint, true);
+    }
+
+    void shUnimPrint(String toPrint) {
+        shPrint(toPrint, false);
+    }
+
+    void shPrint(String toPrint, boolean isImportant) {
         if (redirect) {
             reBuff.add(toPrint);
         }
         else {
+            if (hidden && isImportant) setHidden(false);
             shSTDOUT.addToBuffer(toPrint);
         }
     }
@@ -429,6 +512,12 @@ public class Home extends Activity {
                     break;
                 case "clear":
                     shb_clear();
+                    break;
+                case "hide":
+                    setHidden(true);
+                    break;
+                case "show":
+                    setHidden(false);
                     break;
                 case "cd":
                     shb_cd(args);
@@ -489,10 +578,13 @@ public class Home extends Activity {
 
     void shb_cd(String[] args) {
         // change directory
+        if (args.length < 1){
+            // Changing to current directory... ?
+            return;
+        }
 
-        if (args.length < 2){ return; }
-
-        String newpath = shCurrentDirectory + "/" + args[1];
+        String newpath = shCurrentDirectory + "/" + args[0];
+        Log.d(TAG, "shb_cd: CHANGING DIR TO " + newpath);
         String[] npspl = newpath.split("/");
         newpath = npspl[0];
         for (int i = 1; i < npspl.length - 1; i++){
@@ -517,7 +609,8 @@ public class Home extends Activity {
     }
 
     void shb_clear() {
-        shSTDOUT.setText("");
+        shSTDOUT.buffer.clear();
+        shSTDOUT.refreshFromBuffer();
     }
 
     void shb_help() {
@@ -614,23 +707,31 @@ public class Home extends Activity {
     }
 
     /*
-    * Features to implement:
+    * TODO:
     *
-    *   - input history
-    *       - as per usual, accessible via the up/down arrow keys
-    *       - on mobile, or with limited keyboard, previous command accessible by pressing backspace at an empty prompt
     *   - extend reach of settings apps:
     *       - theming
     *       - fontsize
     *       - stuff like that
+    *   - Find better font for clock...
     * */
 
 
     /*
-    *   BUGS:
+    *   KNOWN BUGS:
     *
     *   - When launching "PIXEL LAUNCHER" from SHAUN, bugs out
-    *       - "java.lang.NullPointerException: Attempt to invoke virtual method 'boolean android.content.Intent.migrateExtraStreamToClipData()' on a null object reference"
-    *       - Just seems to be pixel launcher, not noticed it with other apps (maybe its just for homescreen apps?)
+    *
+    *       - "java.lang.NullPointerException: Attempt to invoke virtual method
+    *         'boolean android.content.Intent.migrateExtraStreamToClipData()'
+    *         on a null object reference"
+    *
+    *       - Just seems to be pixel launcher, not noticed it with other apps
+    *         (maybe its just for homescreen apps?)
+    *
+    *   - When launching a verbose command (i.e. one that produces lots of shell output like "ls"),
+    *     upon unhiding UI, the command (added to buffer via shUnimPrint(s)) is not in the buffer.
+    *
+    *       - Possibly due to different scenes having different instances of the objects?
     * */
 }

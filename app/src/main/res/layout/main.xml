@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/parv"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".Home" >
+
+    <ImageView
+        android:id="@+id/bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:background="@color/colorPrimary"
+        android:layout_below="@id/border"
+        android:layout_above="@id/shSTDIN"/>
+    <ImageView
+        android:id="@+id/top_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_alignTop="@id/shlock"
+        android:layout_alignBottom="@id/border"
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginTop="5dp"
+        android:background="@color/colorPrimaryDark"/>
+    <ImageView
+        android:id="@+id/bottom_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_below="@id/bg"
+        android:layout_alignParentBottom="true"
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginBottom="5dp"
+        android:background="@color/colorPrimary"/>
+    <ImageView
+        android:id="@+id/border"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:layout_below="@id/shlock"
+        android:layout_marginTop="5dp"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:background="@color/colorAccent"/>
+    <cbosoft.shaun.InputBuffer
+        android:id="@+id/shSTDIN"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginBottom="10dp"
+        android:textColor="@color/colorText"
+        android:textSize="8pt"
+        android:backgroundTint="#00000000"/>
+    <cbosoft.shaun.BufferView
+        android:id="@+id/shSTDOUT"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/shSTDIN"
+        android:layout_below="@id/border"
+        android:gravity="bottom"
+        android:textColor="@color/colorText"
+        android:layout_marginTop="0dp"
+        android:layout_marginLeft="10dp"
+        android:layout_marginRight="10dp"
+        android:textSize="6pt"
+        android:stackFromBottom="true"
+        android:transcriptMode="normal"
+        android:lineSpacingMultiplier="1.2"
+        android:maxLines="1000"
+        android:scrollbars="none"/>
+    <TextClock
+        android:id="@+id/shlock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format24Hour="HH:mm"
+        android:format12Hour="HH:mm"
+        android:layout_marginStart="15dp"
+        android:textColor="@color/colorText"
+        android:textSize="50sp"
+        android:textStyle="bold"/>
+    <TextView
+        android:id="@+id/subinf"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/shlock"
+        android:layout_alignTop="@id/shlock"
+        android:layout_alignBottom="@id/shlock"
+        android:gravity="end"
+        android:textAlignment="gravity"
+        android:layout_marginTop="10dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="15dp" />
+    <!-- <cbosoft.shaun.DrawView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" /> -->
+
+</RelativeLayout>

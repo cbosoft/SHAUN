@@ -4,4 +4,7 @@
     <color name="colorPrimaryDark">#CC222222</color>
     <color name="colorAccent">#0088CC</color>
     <color name="colorText">#DFDFDF</color>
+    <color name="colorGlass">#00000000</color>
+    <color name="colorPrimaryGlassy">#88333333</color>
+    <color name="colorPrimaryDarkGlassy">#88222222</color>
 </resources>

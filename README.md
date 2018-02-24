@@ -13,7 +13,7 @@ There are some major security limitations on Android apps imposed by Google... w
 
 <h4 align="center">Why?</h4>
 
-Its better.
+It's faster.
 
 Given that the goal of touchscreens has been to get **away** from keyboards, this may seem like a counter intuitive approach to the homescreen. Some new phones are being released with *physical keyboards* again (not much of a [growth market](https://trends.google.com/trends/explore?date=all&q=physical%20keyboard) but blackberry seem pretty confident its [still a thing](https://www.blackberrymobile.com/uk/keyone/)). Physical keyboards allow the user a great opportunity for workflow enhancement, faster accessing of a great array of shortcuts. Typing four keys (`c-h-r-<RET>` tab-completes to `chrome`) can be a lot faster than opening up an app drawer, finding the desired app, and then pressing it. Chrome is maybe a bad example, most people have their web browser as a shortcut on their main homescreen. So this may be slower. 
 

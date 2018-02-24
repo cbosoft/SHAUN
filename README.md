@@ -1,9 +1,13 @@
 # SHAUN
 **SH**ell l**AUN**cher
 
+<p align="center>
+Hidden UI ->
 ![alt text](screenshots/hidden.png "img-hidden-shaun")
 ![alt text](screenshots/unhidden.png "img-unhidden-shaun")
-
+<- Unhidden UI
+</p>
+                                                         
 A very cut back, minimal homescreen consisting entirely of an auto-completing application search+launch field --- the "command line". The goal is to create an easily usable, mostly POSIX compliant terminal emulator, usable as a means of accessing apps on Android.
 
 There are some major security limitations on Android apps imposed by Google... which makes sense, but will limit the functionality of the emulator.

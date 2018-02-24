@@ -22,15 +22,18 @@ Cool, but what about the shortcut apps? Our most used apps we want to secure qui
 In short, the on-the-go power user. Someone who doesn't mess about with fancy app drawers and complicated gestures to get to their apps. Someone who wants to get things done with a minimum of fuss, but with a modicum of elegance and retro style. Of course, its also for the shell nerd. Do you not feel comfortable away from a VT102? Not to fear, SHAUN is here!
 
 <h1 align="center">Features</h1>
-Command-line:
-  - Launching of apps (with "tab" completion).
-        Start typing the name of an app, press enter to find the name of the app, enter again to launch the app.
-    - use "url" to view a webpage with the default web browser
-  - Can browse the filesystem:
-    - "cd": change directory relative to current
-    - "ls": list contents of current directory
-Home screen:
-  - As a home screen, the app does what you want.
-    - Clean UI design, can quickly see the time 
-        (phones are pretty much expensive watches half the time)
-    - Apps launched with the stroke of but a few keys (thanks to the command line)
+
+  * Launching of apps (with "tab" completion).
+    * Start typing the name of an app, press enter to find the name of the app, enter again to launch the app.
+    * use "url" to view a webpage with the default web browser
+  * Can browse the filesystem:
+    * "cd": change directory relative to current
+    * "ls": list contents of current directory
+  * Clean UI design
+  * Apps launched with the stroke of but a few keys (thanks to the command line)
+  
+<h1 align="center">Upcoming Features</h1>
+
+  * User-editable aliases
+  * Theming
+  * Extensions

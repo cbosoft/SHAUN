@@ -79,10 +79,13 @@
         android:layout_height="wrap_content"
         android:format24Hour="HH:mm"
         android:format12Hour="HH:mm"
+        android:clickable="true"
+        android:focusable="false"
+        android:onClick="clockClicked"
         android:layout_marginStart="15dp"
         android:textColor="@color/colorText"
         android:textSize="50sp"
-        android:textStyle="bold"/>
+        android:textStyle="bold" />
     <TextView
         android:id="@+id/subinf"
         android:layout_width="match_parent"

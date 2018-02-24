@@ -67,6 +67,9 @@
         android:layout_above="@id/bg"
         android:format24Hour="HH:mm"
         android:format12Hour="HH:mm"
+        android:clickable="true"
+        android:focusable="false"
+        android:onClick="clockClicked"
         android:textColor="@color/colorText"
         android:textSize="100sp"
         android:textStyle="bold"/>

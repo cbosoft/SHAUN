@@ -31,6 +31,8 @@ import android.os.Build;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -215,15 +217,13 @@ public class Home extends Activity {
 
     void setupAppMaps() {
         Log.i(TAG, "SETTING UP APP MAPS");
-        // Get list of installed apps:
         List<ApplicationInfo> lApps;
         lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
 
-        Log.d(TAG, "SETTING UP APPMAPS");
-        input2andrapp = new HashMap<>();
+        Map<String, String> ignoreapps = new HashMap();
+        ignoreapps.put("google", "");
+
         input2type = new HashMap<>();
-        // add builtins to type map
-        // android apps will be added automatically later
         input2type.put("ls", 2);
         input2type.put("url", 2);
         input2type.put("help", 2);
@@ -233,22 +233,25 @@ public class Home extends Activity {
         input2type.put("show", 2);
         input2type.put("shset", 2);
         input2type.put("shget", 2);
+        input2type.put("apm-list", 2);
         input2type.put("grep", 2);
 
-        Log.d(TAG, "SETTING UP ALIASES");
         ALIASES = new HashMap<>();
-        // android apps
         ALIASES.put("play", "google play store");
         ALIASES.put("amazon", "amazon shopping");
         ALIASES.put("fm", "file manager");
+        ALIASES.put("cal", "calendar");
         ALIASES.put("ukp", "url https://www.reddit.com/r/ukpolitics");
-        // builtins
         ALIASES.put("cls", "clear");
 
+        input2andrapp = new HashMap<>();
         for (int i = 0; i < lApps.size(); i++) {
             ApplicationInfo ai = lApps.get(i);
-            input2andrapp.put(ai.loadLabel(getPackageManager()).toString().toLowerCase(), ai.packageName);
-            input2type.put(ai.loadLabel(getPackageManager()).toString().toLowerCase(), 1);
+            String label = ai.loadLabel(getPackageManager()).toString().toLowerCase();
+            if (ignoreapps.get(label) == null && ai.enabled) {
+                input2andrapp.put(label, ai.packageName);
+                input2type.put(label, 1);
+            }
         }
     }
 
@@ -424,16 +427,21 @@ public class Home extends Activity {
     }
 
     String[] trimArr(String[] toTrim) {
+        if (toTrim == null) return null;
         ArrayList<String> tt = new ArrayList<>(Arrays.asList(toTrim));
 
         for (int i = 0; i < toTrim.length; i++){
             int j = toTrim.length - i - 1;
-            if (toTrim[j].equals("")){
+            if (toTrim[j] == null || toTrim[j].equals("")){
                 tt.remove(j);
             }
         }
 
         return tt.toArray(new String[tt.size()]);
+    }
+
+    public void clockClicked(View v) {
+        shExec("clock", null);
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -475,15 +483,18 @@ public class Home extends Activity {
                     if (args[i].equals("|")) {
                         if (args[i + 1].equals("grep")) {
                             // pipe output
+                            // <cmnd> <cargs> | grep <pattern>
+                            // to
+                            // grep <pattern> <cmnd> <cargs>
                             String nc = "grep";
                             String[] na = new String[args.length - 1];
                             na[0] = args[i + 2]; // pattern
                             na[1] = command; // command
-
-                            for (int j = 1; j < i; j++) {
-                                Log.d(TAG, "shExec: argsj: " + args[j]);
-                                na[j + 1] = args[j];
-                            }
+                            System.arraycopy(args, 0, na, 2, args.length - 3);
+//                            for (int j = 1; j < i; j++) {
+//                                Log.d(TAG, "shExec: argsj: " + args[j]);
+//                                na[j + 1] = args[j];
+//                            }
 
                             command = nc;
                             args = na;
@@ -530,6 +541,9 @@ public class Home extends Activity {
                     break;
                 case "grep":
                     shb_grep(args);
+                    break;
+                case "apm-list":
+                    shb_apm_list(args);
                     break;
                 default:
                     shPrint("Command " + command + " not found.");
@@ -702,6 +716,59 @@ public class Home extends Activity {
         reBuff.clear();
 
         for (String s: oBuff) {
+            shPrint(s);
+        }
+    }
+
+    void shb_apm_list(String[] args) {
+        List<ApplicationInfo> lApps;
+        lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
+
+        boolean lowercasify = false, orderify = true, detailed = false;
+
+        if (args != null){
+
+            for (String a: args){
+                if (a.contains("l")) {
+                    lowercasify = true;
+                }
+
+                if (a.contains("u")) {
+                    orderify = true;
+                }
+
+                if (a.contains("d")) {
+                    detailed = true;
+                }
+            }
+        }
+
+        shPrint("Installed packages:");
+        ArrayList<String> appNameList = new ArrayList<>(0);
+
+        for (ApplicationInfo ai: lApps) {
+            String appName = ai.loadLabel(getPackageManager()).toString();
+            if (lowercasify) appName = appName.toLowerCase();
+
+            if (detailed){
+                String enabledIndicator = "";
+                if (!ai.enabled) enabledIndicator = " [DISABLED]";
+                appName = appName + enabledIndicator;
+            }
+            appNameList.add(appName);
+        }
+
+        //appNameList.sort(String::compareToIgnoreCase);
+        if (orderify) {
+            Collections.sort(appNameList, new Comparator<String>() {
+                @Override
+                public int compare(String s1, String s2) {
+                    return s1.compareToIgnoreCase(s2);
+                }
+            });
+        }
+
+        for (String s: appNameList) {
             shPrint(s);
         }
     }

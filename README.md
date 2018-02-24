@@ -5,7 +5,7 @@
   <img src="screenshots/unhidden.png" />
 </p>
                                                          
-A minimal Android launcher consisting of an auto-completing application search+launch field... a command prompt. The goal is to create an easily usable, mostly POSIX compliant terminal emulator, usable as a means of accessing apps on Android.
+A minimal Android launcher consisting of an auto-completing application search+launch field... a command prompt. The goal is to create an easily usable, terminal emulator (+ shell), usable as a means of accessing apps on Android.
 
 There are some major security limitations on Android apps imposed by Google... which makes sense, but will limit the functionality of the emulator.
 

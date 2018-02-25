@@ -7,6 +7,7 @@
     android:layout_height="match_parent"
     tools:context=".Home" >
 
+
     <ImageView
         android:id="@+id/bg"
         android:layout_width="match_parent"
@@ -82,10 +83,30 @@
         android:clickable="true"
         android:focusable="false"
         android:onClick="clockClicked"
+        android:text="00:00"
         android:layout_marginStart="15dp"
+        android:layout_marginBottom="10dp"
         android:textColor="@color/colorText"
         android:textSize="50sp"
         android:textStyle="bold" />
+    <TextClock
+        android:id="@+id/shdate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignStart="@id/shlock"
+        android:layout_alignEnd="@id/shlock"
+        android:layout_marginBottom="5dp"
+        android:textAlignment="center"
+        android:layout_above="@id/bg"
+        android:format24Hour="dd-M-yy"
+        android:format12Hour="dd-M-yy"
+        android:text="12-02-18"
+        android:clickable="true"
+        android:focusable="false"
+        android:onClick="calClicked"
+        android:textColor="@color/colorText"
+        android:textSize="20sp"
+        android:textStyle="bold"/>
     <TextView
         android:id="@+id/subinf"
         android:layout_width="match_parent"

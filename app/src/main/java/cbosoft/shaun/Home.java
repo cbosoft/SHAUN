@@ -7,20 +7,26 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.renderscript.ScriptGroup;
+import android.support.v4.view.MotionEventCompat;
 import android.text.Editable;
 import android.text.Layout;
 import android.text.TextWatcher;
+import android.text.format.DateUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.transition.AutoTransition;
+import android.transition.Fade;
 import android.transition.Scene;
 import android.transition.Transition;
 import android.transition.TransitionManager;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.view.View;
@@ -29,6 +35,7 @@ import android.widget.TextClock;
 import android.os.Build;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,6 +43,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.regex.Pattern;
 
 import static android.content.ContentValues.TAG;
@@ -56,12 +65,14 @@ public class Home extends Activity {
     String shPrompt;
     String shCurrentDirectory = Environment.getRootDirectory().toString();
     Boolean redirect = false;
-    ArrayList<String> reBuff = new ArrayList<>(0);
+    ArrayList<String> reBuff = new ArrayList<>(0), plcBuff;
     String prevCommand = "";
 
     Map<String, String> ALIASES;
     Map<String, Integer> input2type;
     Map<String, String> input2andrapp;
+    Map<String, String> ignoreapps;
+    Map<String, String> manmap;
 
     SharedPreferences shPref;
     SharedPreferences.Editor shPrefEditor;
@@ -106,7 +117,7 @@ public class Home extends Activity {
                     return;
                 }
                 int rv = shTabComplete(entered);
-                if (rv != 1) shUnimPrint(ss);
+                if (rv != 1) shUnimPrint("\n" + ss);
                 switch (rv) {
                     case 0: // no match
                         shPrint(entered + ": command not found");
@@ -152,6 +163,7 @@ public class Home extends Activity {
         setupLayout();
         setupAppMaps();
         setupScenes();
+        setupMan();
         setSubInfo();
     }
 
@@ -171,6 +183,8 @@ public class Home extends Activity {
 
     void setHidden(boolean state) {
 
+        plcBuff = shSTDOUT.buffer;
+
         if (state) {
             Log.d(TAG, "setHidden: HIDING");
             TransitionManager.go(hiddenScene, t);
@@ -180,11 +194,13 @@ public class Home extends Activity {
             TransitionManager.go(mainScene, t);
         }
 
-
         hidden = state;
         setupLayout();
         setSubInfo();
-        shSTDOUT.invalidate();
+
+        shSTDOUT.buffer = plcBuff;
+        shSTDOUT.refreshFromBuffer();
+
     }
 
     void setupPreferences() {
@@ -220,7 +236,7 @@ public class Home extends Activity {
         List<ApplicationInfo> lApps;
         lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
 
-        Map<String, String> ignoreapps = new HashMap();
+        ignoreapps = new HashMap();
         ignoreapps.put("google", "");
 
         input2type = new HashMap<>();
@@ -235,6 +251,8 @@ public class Home extends Activity {
         input2type.put("shget", 2);
         input2type.put("apm-list", 2);
         input2type.put("grep", 2);
+        input2type.put("man", 2);
+        input2type.put("mc", 2);
 
         ALIASES = new HashMap<>();
         ALIASES.put("play", "google play store");
@@ -243,6 +261,7 @@ public class Home extends Activity {
         ALIASES.put("cal", "calendar");
         ALIASES.put("ukp", "url https://www.reddit.com/r/ukpolitics");
         ALIASES.put("cls", "clear");
+        ALIASES.put("cam", "blackberry camera");
 
         input2andrapp = new HashMap<>();
         for (int i = 0; i < lApps.size(); i++) {
@@ -261,6 +280,22 @@ public class Home extends Activity {
         rootScene = findViewById(R.id.root);
         hiddenScene = Scene.getSceneForLayout(rootScene, R.layout.hidden, this);
         mainScene = Scene.getSceneForLayout(rootScene, R.layout.main, this);
+    }
+
+    void setupMan() {
+        manmap = new HashMap<>();
+
+        manmap.put("apm-list", "Android Package Manager: List\nLists all installed apps.\n\nUsage:\n  apm-list [-ld]\n\nOptions:\n  -l  lowercase list (useful for grepping results)\n  -d  detailed list");
+        manmap.put("cd", "Change directory.\n\nUsage:\n  cd <relative directory>");
+        manmap.put("ls", "List contents of current directory, or selected directory.\n\nUsage:\n  ls [<dir>]");
+        manmap.put("hide", "Hides UI. UI is unhidden on output to STDOUT.");
+        manmap.put("show", "Shows UI. UI is also shown on output to STDOUT.");
+        manmap.put("shaun", "SHAUN Launcher\nMinimal Android launcher, intended for the power user and the terminal geek." +
+                        "\n\nSHAUN is distributed under the GPLv3 License. You can view the full license by executing the command \"license\" at the home shell.");
+        manmap.put("clear", "Clear all output from buffer history.");
+        manmap.put("shset", "SHAUN Settings manager\nSets a value in the settings database.\n\nUsage:\n  shset <key> <value>");
+        manmap.put("shget", "SHAUN Settings manager\nGets a value in the settings database.\nLaunch with no options to get all stored values.\n\nUsage:\n  shget [<key>]");
+        manmap.put("man", "Manual\nGiven the name of an app, returns its function and usage.\n\nUsage:\n  man <appname>");
     }
 
     int shTabComplete(String entered) {
@@ -444,6 +479,10 @@ public class Home extends Activity {
         shExec("clock", null);
     }
 
+    public void calClicked(View v) {
+        shExec("calendar", null);
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///// SHELL STUFF //////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -461,7 +500,10 @@ public class Home extends Activity {
             reBuff.add(toPrint);
         }
         else {
-            if (hidden && isImportant) setHidden(false);
+            if (hidden && isImportant){
+                setHidden(false);
+                Thread.yield();
+            }
             shSTDOUT.addToBuffer(toPrint);
         }
     }
@@ -491,10 +533,6 @@ public class Home extends Activity {
                             na[0] = args[i + 2]; // pattern
                             na[1] = command; // command
                             System.arraycopy(args, 0, na, 2, args.length - 3);
-//                            for (int j = 1; j < i; j++) {
-//                                Log.d(TAG, "shExec: argsj: " + args[j]);
-//                                na[j + 1] = args[j];
-//                            }
 
                             command = nc;
                             args = na;
@@ -519,7 +557,10 @@ public class Home extends Activity {
                     shb_url(args[0]);
                     break;
                 case "help":
-                    shb_help();
+                    shb_man(args);
+                    break;
+                case "man":
+                    shb_man(args);
                     break;
                 case "clear":
                     shb_clear();
@@ -544,6 +585,9 @@ public class Home extends Activity {
                     break;
                 case "apm-list":
                     shb_apm_list(args);
+                    break;
+                case "mc":
+                    shb_mc(args);
                     break;
                 default:
                     shPrint("Command " + command + " not found.");
@@ -597,7 +641,24 @@ public class Home extends Activity {
             return;
         }
 
-        String newpath = shCurrentDirectory + "/" + args[0];
+        if (args.length > 1) {
+            shPrint("Syntax error.\n\nUsage:\n  cd <dir>");
+            return;
+        }
+
+
+        String newpath = "";
+
+        if (args[0].startsWith("$SD")){
+            newpath = Environment.getExternalStorageDirectory().getAbsolutePath() + args[0].replace("$SD", "");
+        }else if (args[0].contains("$SD")){
+            shPrint("Error. Absolute var must be used at begining of path.");
+            return;
+        }else {
+            newpath = shCurrentDirectory + "/" + args[0];
+        }
+
+
         Log.d(TAG, "shb_cd: CHANGING DIR TO " + newpath);
         String[] npspl = newpath.split("/");
         newpath = npspl[0];
@@ -618,19 +679,13 @@ public class Home extends Activity {
             setSubInfo();
         }
         else {
-            shPrint(args[1] + " is not a directory.");
+            shPrint(args[0] + " is not a directory.");
         }
     }
 
     void shb_clear() {
         shSTDOUT.buffer.clear();
         shSTDOUT.refreshFromBuffer();
-    }
-
-    void shb_help() {
-        shPrint("SHAUN is a trimmed-down implementation of a terminal emulator. Given the security limitations (sensibly) enforced on Android apps, this is not a fully featured terminal.");
-        shPrint("The goal is to have as close to a POSIX complete terminal as is possible, as well as an extension API for the user to add their own apps to the \"shell's\" path.");
-
     }
 
     void shb_shset(String[] args) {
@@ -665,25 +720,25 @@ public class Home extends Activity {
     void shb_shget(String[] args) {
 
         boolean fine = true;
-
-        if (args == null){fine = false;}
-        else if (args.length == 0){fine = false;}
-        else if (args.length > 1){fine = false;}
+        if (args != null && args.length > 1){fine = false;}
 
         if (!fine){
             shPrint("Syntax error. Correct syntax is:");
-            shPrint("  shget <key>");
-            shPrint("  shget help");
-        }
-        else if (args.length == 1 && args[0].equals("help")) {
-            shPrint("shget: shaun launcher settings manager.");
-            shPrint("\nUsage:");
-            shPrint("  shget <key>");
+            shPrint("  shget [<key>]");
             shPrint("  shget help");
         }
         else {
             shPrint("Get:");
-            shPrint("  " + args[0] + " : " + shPref.getString(args[0], "NOT_FOUND"));
+            if (args == null || args.length == 0)  {
+                Map<String, ?> mk = shPref.getAll();
+
+                for (String k: mk.keySet()) {
+                    shPrint("  " + k + " : " + shPref.getString(k, "Oops! Something went wrong"));
+                }
+            }
+            else {
+                shPrint("  " + args[0] + " : " + shPref.getString(args[0], "NOT_FOUND"));
+            }
         }
     }
 
@@ -751,14 +806,14 @@ public class Home extends Activity {
             if (lowercasify) appName = appName.toLowerCase();
 
             if (detailed){
-                String enabledIndicator = "";
+                String enabledIndicator = "", ignoredIndicator = "";
                 if (!ai.enabled) enabledIndicator = " [DISABLED]";
-                appName = appName + enabledIndicator;
+                if (ignoreapps.get(appName) != null) ignoredIndicator = " [IGNORED]";
+                appName = appName + enabledIndicator + ignoredIndicator;
             }
             appNameList.add(appName);
         }
 
-        //appNameList.sort(String::compareToIgnoreCase);
         if (orderify) {
             Collections.sort(appNameList, new Comparator<String>() {
                 @Override
@@ -773,6 +828,57 @@ public class Home extends Activity {
         }
     }
 
+    void shb_man(String[] args) {
+
+        if (args != null && args.length != 0) {
+            // args is app name
+            String res = manmap.get(args[0]);
+            if (res != null) {
+                shPrint(res);
+            }
+            else {
+                shPrint(" Manual error: " + args[0] + " not found!");
+            }
+        }
+        else {
+            // no args
+            shPrint(manmap.get("shaun"));
+
+            shPrint("Manual entries index:");
+            for (String k: manmap.keySet()) {
+                shPrint("  - " + k);
+            }
+        }
+    }
+
+    void shb_mc(String[] args) {
+        // With thanks to the answerer here:
+        // https://stackoverflow.com/questions/27307265/control-playback-of-the-spotify-app-from-another-android-app
+        int keycode = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+        if (args != null && args.length > 0) {
+            if (args[0].equals("next")) {
+                keycode = KeyEvent.KEYCODE_MEDIA_NEXT;
+            }
+            else if (args[0].equals("prev")) {
+                keycode = KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+            }
+            else {
+                shPrint("Option not understood: " + args[0] + "\nAvailable options are:\n  next\n  prev\nor with no options to toggle playing.");
+                return;
+            }
+        }
+
+        Intent i = new Intent(Intent.ACTION_MEDIA_BUTTON);
+        i.setPackage("com.spotify.music");
+        synchronized (this) {
+            i.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_DOWN, keycode));
+            sendOrderedBroadcast(i, null);
+
+            i.putExtra(Intent.EXTRA_KEY_EVENT, new KeyEvent(KeyEvent.ACTION_UP, keycode));
+            sendOrderedBroadcast(i, null);
+        }
+    }
+
     /*
     * TODO:
     *
@@ -781,6 +887,10 @@ public class Home extends Activity {
     *       - fontsize
     *       - stuff like that
     *   - Find better font for clock...
+    *   - Add date beneath clock (at least in hidden mode)
+    *       - Make it clickable, launches calander app
+    *       - can that be set default?
+    *       - could this be set via settings?
     * */
 
 
@@ -795,10 +905,7 @@ public class Home extends Activity {
     *
     *       - Just seems to be pixel launcher, not noticed it with other apps
     *         (maybe its just for homescreen apps?)
-    *
-    *   - When launching a verbose command (i.e. one that produces lots of shell output like "ls"),
-    *     upon unhiding UI, the command (added to buffer via shUnimPrint(s)) is not in the buffer.
-    *
-    *       - Possibly due to different scenes having different instances of the objects?
     * */
+
+
 }

@@ -9,11 +9,11 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/sh_ico"
+        android:roundIcon="@mipmap/sh_ico_round"
         android:label="@string/app_name"
         android:launchMode="singleTask"
         android:stateNotNeeded="true"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen"
         tools:ignore="GoogleAppIndexingWarning">

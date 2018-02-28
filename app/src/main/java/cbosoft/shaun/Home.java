@@ -1,32 +1,32 @@
 package cbosoft.shaun;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
-import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.renderscript.ScriptGroup;
-import android.support.v4.view.MotionEventCompat;
+import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
 import android.text.Editable;
-import android.text.Layout;
+import android.text.InputType;
 import android.text.TextWatcher;
-import android.text.format.DateUtils;
 import android.text.method.ScrollingMovementMethod;
 import android.transition.AutoTransition;
-import android.transition.Fade;
 import android.transition.Scene;
 import android.transition.Transition;
 import android.transition.TransitionManager;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.KeyEvent;
-import android.view.MotionEvent;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.view.View;
@@ -34,36 +34,50 @@ import android.view.ViewGroup;
 import android.widget.TextClock;
 import android.os.Build;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static android.content.ContentValues.TAG;
 
 public class Home extends Activity {
 
-    // UI
-    TextView devInfo;
-    TextClock Clock;
-    ViewGroup rootScene;
-    Scene mainScene, hiddenScene;
-    Transition t = new AutoTransition();
-    boolean hidden = true, devmode = false;
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// ATTRIBUTES ///////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
-    // Shell
+    // UI
+    // Main
+    TextView shInfo;
+    TextClock shClock, shDate;
     BufferView shSTDOUT;
     InputBuffer shSTDIN;
+
+    // Scenes
+    ViewGroup rootScene;
+    Scene mainScene, hiddenScene, editorScene;
+    Transition transistion = new AutoTransition();
+    SceneType sceneType = SceneType.MINIMISED;
+
+    // Shell
     String shPrompt;
-    String shCurrentDirectory = Environment.getRootDirectory().toString();
+    String shCurrentDirectory = Environment.getExternalStorageDirectory().getAbsolutePath(); //Environment.getRootDirectory().toString();
     Boolean redirect = false;
     ArrayList<String> reBuff = new ArrayList<>(0), plcBuff;
     String prevCommand = "";
@@ -73,9 +87,13 @@ public class Home extends Activity {
     Map<String, String> input2andrapp;
     Map<String, String> ignoreapps;
     Map<String, String> manmap;
+    Map<String, String> SHVARS;
 
     SharedPreferences shPref;
     SharedPreferences.Editor shPrefEditor;
+
+    // Editor
+    ShaunEditor shEditor;
 
     TextWatcher tWatcher = new TextWatcher() {
         @Override
@@ -88,64 +106,321 @@ public class Home extends Activity {
 
         @Override
         public void onTextChanged(CharSequence s, int start, int before, int count) {
-
-            if (s.length() < 1) {
-                return;
-            }
-            else if (s.length() < shPrompt.length()){
-                setStdin(shPrompt + prevCommand);
-                return;
-            }
-            else if (count < before){
-                return;
-            }
-            char c = s.charAt(start);
-            if (c == '\n') {
-                String ss = s.toString().replaceAll("\n", "");
-                setStdin(ss);
-
-                // do something with input
-                String entered = ss.substring(shPrompt.length());
-                prevCommand = entered;
-
-                if (entered.startsWith("!devc_") && devmode) {
-                    switch (entered) {
-                        default:
-                            shPrint("Unrecognised dev command: " + entered);
-                            break;
-                    }
-                    return;
-                }
-                int rv = shTabComplete(entered);
-                if (rv != 1) shUnimPrint("\n" + ss);
-                switch (rv) {
-                    case 0: // no match
-                        shPrint(entered + ": command not found");
-                        resetStdin();
-                        break;
-                    case 1: // partial match
-                        // stdin is updated in 'shTabComplete'
-                        // do nothing here
-                        break;
-                    case 2: // total match
-                        // execute!
-                        if (!entered.contains(" ")) {
-                            shExec(entered, null);
-                        }
-                        else {
-                            String command = entered.substring(0, entered.indexOf(" "));
-                            String[] args = entered.substring(entered.indexOf(" ")).split(" ");
-                            shExec(command, args);
-                        }
-                        break;
-                    case 3: // total match
-                        // execute!
-                        shExec(entered, null);
-                        break;
-                }
-            }
+            inputTextChanged(s, start, before, count);
         }
     };
+
+    TextWatcher editorWatcher = new TextWatcher() {
+        @Override
+        public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+
+        }
+
+        @Override
+        public void onTextChanged(CharSequence s, int i, int i1, int i2) {
+            shEditor.edited = true;
+
+            String ss = s.toString();
+
+            if (ss.length() == shEditor.fileBuffer.length()) {
+                if (ss.equals(shEditor.fileBuffer)) {
+                    shEditor.edited = false;
+                }
+            }
+
+            shEditor.updateUI();
+        }
+
+        @Override
+        public void afterTextChanged(Editable editable) {
+
+        }
+    };
+
+    class ShaunEditor{
+        // Android Views
+        private TextView shedStatus, shedFilePath, shedNotif;
+        private ShaunEditorView shedIn;
+        private Button saveBtn, quitBtn;
+
+        private String filePath = "", fileBuffer = "", status = "";
+        ShaunEditorFileType currentFileType;
+        boolean edited = false;
+
+        ShaunEditor(Typeface tf, TextWatcher tw) {
+
+            this.currentFileType = ShaunEditorFileType.PLAINTEXT;
+
+            this.shedStatus = findViewById(R.id.shedStatus);
+            this.shedFilePath = findViewById(R.id.shedFilePath);
+            this.shedIn = findViewById(R.id.shedIn);
+            this.saveBtn = findViewById(R.id.btnSave);
+            this.quitBtn = findViewById(R.id.btnQuit);
+            this.shedNotif = findViewById(R.id.shedNotification);
+
+            this.shedStatus.setTypeface(tf);
+            this.shedFilePath.setTypeface(tf);
+            this.shedIn.setTypeface(tf);
+            this.saveBtn.setTypeface(tf);
+            this.quitBtn.setTypeface(tf);
+            this.shedNotif.setTypeface(tf);
+
+
+            this.shedFilePath.setText(R.string.newFileString);
+            this.shedIn.addTextChangedListener(tw);
+            this.shedIn.requestFocus();
+
+            this.updateUI();
+        }
+
+        int openFileToBuffer(String filePath) {
+            String line;
+            StringBuilder sb = new StringBuilder();
+
+            this.filePath = filePath;
+            shedFilePath.setText(filePath);
+
+            int rv = 0;
+
+            try {
+                FileReader fileReader = new FileReader(filePath);
+                BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+                while((line = bufferedReader.readLine()) != null) {
+                    sb.append(line);
+                    sb.append("\n");
+                }
+                if (sb.length() > 0) sb.deleteCharAt(sb.length() - 1);
+                bufferedReader.close();
+            }
+            catch(FileNotFoundException ex) {
+                Log.d(TAG, "openFileToBuffer: fnfex");
+                rv = 1;
+            }
+            catch(IOException ex) {
+                flashMessage("Could not open file.");
+                rv = -1;
+            }
+
+            fileBuffer = sb.toString();
+            Log.d(TAG, "openFileToBuffer: " + sb.toString());
+            currentFileType = guessThisFileType();
+
+            setBuffer();
+            updateUI();
+
+            return rv;
+        }
+
+        void writeBufferToFile() {
+            writeBufferToFile(this.filePath);
+        }
+
+        void writeBufferToFile(String filePath) {
+
+            if (!checkNGetWritePermission()) {
+                flashMessage("Need write permission to save file.");
+                return;
+            }
+
+            try {
+                File f = new File(filePath);
+                if (!f.exists()) f.createNewFile();
+            }
+            catch (IOException ioex) { /* Pass */ }
+
+            try {
+                FileWriter fileWriter = new FileWriter(filePath);
+                BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
+                this.fileBuffer = this.shedIn.getText().toString();
+                bufferedWriter.write(this.fileBuffer);
+                bufferedWriter.flush();
+                bufferedWriter.close();
+                this.edited = false;
+                this.updateUI();
+                flashMessage("File saved!");
+            }
+            catch(FileNotFoundException ex) {
+                flashMessage("Could not find file.");
+            }
+            catch(IOException ex) {
+                flashMessage("Could not open file.");
+            }
+        }
+
+        boolean canQuit() {
+            return !edited;
+        }
+
+        private ShaunEditorFileType guessThisFileType() {
+            return guessFileType(fileBuffer, filePath);
+        }
+
+        private ShaunEditorFileType guessFileType(String fileContents, String filePath) {
+            int[] likelihoods = new int[]{50, 0, 0, 0, 0, 0, 0, 0, 0};
+
+            int magic_conf = 100, comments_conf = 20, extension_conf = 100;
+
+            String ext;
+            if (filePath.contains(".")) {
+                ext = filePath.substring(filePath.lastIndexOf(".") + 1);
+                Log.d(TAG, "guessFileType: " + ext);
+                switch (ext) {
+                    case "txt":
+                        likelihoods[0] += extension_conf;
+                    case "c":
+                        likelihoods[1] += extension_conf;
+                        break;
+                    case "cpp":
+                    case "cc":
+                        likelihoods[2] += extension_conf;
+                        break;
+                    case "py":
+                    case "pyx":
+                        likelihoods[3] += extension_conf;
+                        break;
+                    case "html":
+                    case "yaml":
+                    case "yml":
+                    case "xml":
+                        likelihoods[4] += extension_conf;
+                        break;
+                    case "json":
+                        likelihoods[5] += extension_conf;
+                        break;
+                    case "sh":
+                        likelihoods[6] += extension_conf;
+                        break;
+                    case "tex":
+                        likelihoods[7] += extension_conf;
+                        break;
+                    case "java":
+                        likelihoods[8] += extension_conf;
+                        break;
+                }
+            }
+
+            if (fileContents.startsWith("#")) {
+                String magicLine = fileContents.split("\n")[0];
+
+                if (magicLine.endsWith("python") || magicLine.endsWith("python2") || magicLine.endsWith("python3")) {
+                    likelihoods[3] += magic_conf;
+                }
+
+                if (magicLine.endsWith("bash")) {
+                    likelihoods[6] += magic_conf;
+                }
+
+                if (magicLine.startsWith("\\documentclass{")) {
+                    likelihoods[7] += magic_conf;
+                }
+
+                if (magicLine.startsWith("<!")) {
+                    likelihoods[4] += magic_conf;
+                }
+            }
+
+            if (fileContents.contains("//") || fileContents.contains("/*")) {
+                // uses 'C' style comments.... probably
+                likelihoods[1] += comments_conf;
+                likelihoods[2] += comments_conf;
+                likelihoods[8] += comments_conf;
+
+                if (fileContents.contains("\n#include")) {
+                    // 'C' style import statements
+                    likelihoods[1] += comments_conf;
+                    likelihoods[2] += comments_conf;
+                }
+            }
+
+            if (fileContents.contains("\nimport")) {
+                // import statement
+                likelihoods[3] += comments_conf;
+                likelihoods[8] += comments_conf;
+            }
+
+            if (fileContents.contains("<") && fileContents.contains("</") && fileContents.contains(">")) {
+                // Perhaps some kind of tagging?
+                likelihoods[4] += comments_conf;
+            }
+
+            int most = 0, at = 0;
+            for (int i = 0; i < likelihoods.length; i++) {
+                if (likelihoods[i] > most) {
+                    most = likelihoods[i];
+                    at = i;
+                }
+            }
+
+            switch (at) {
+                case 0:
+                    return ShaunEditorFileType.PLAINTEXT;
+                case 1:
+                    return ShaunEditorFileType.C;
+                case 2:
+                    return ShaunEditorFileType.CPP;
+                case 3:
+                    return ShaunEditorFileType.PYTHON;
+                case 4:
+                    return ShaunEditorFileType.MARKUP;
+                case 5:
+                    return ShaunEditorFileType.JSON;
+                case 6:
+                    return ShaunEditorFileType.SHELL;
+                case 7:
+                    return ShaunEditorFileType.LATEX;
+                case 8:
+                    return ShaunEditorFileType.JAVA;
+
+            }
+
+            return ShaunEditorFileType.PLAINTEXT;
+        }
+
+        private void setStatus() {
+            this.status = "[ ";
+
+            status += this.currentFileType.toString();
+
+            if (this.edited) status += "*";
+
+            status += " ]";
+
+            shedStatus.setText(status);
+            shedFilePath.setText(filePath);
+        }
+
+        private void setBuffer() {
+            this.shedIn.setText(this.fileBuffer);
+        }
+
+        void updateUI() {
+            // more?
+            setStatus();
+        }
+
+        void flashMessage(String mesg) {
+            shedNotif.setText(mesg);
+            shedNotif.setVisibility(View.VISIBLE);
+            shedNotif.invalidate();
+            try {
+                TimeUnit.MILLISECONDS.sleep(100);
+            } catch (InterruptedException e) {/* Pass */ }
+        }
+
+    }
+
+    class AppFetcher extends Thread {
+        AppFetcher() { }
+
+        public void run() {
+            setupAppMaps();
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// INHERITED METHODS ////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -159,9 +434,17 @@ public class Home extends Activity {
         int height = displayMetrics.heightPixels;
         v.getLayoutParams().height = height / 2;
 
+        SHVARS = new HashMap<>();
+        SHVARS.put(Environment.getExternalStorageDirectory().getAbsolutePath(), "$sdcard");
+        SHVARS.put(Environment.getRootDirectory().getAbsolutePath(), "$root");
+
         setupPreferences();
-        setupLayout();
-        setupAppMaps();
+        setupLayout(SceneType.MINIMISED);
+        shUnimPrint("(sh-strt) Settings loaded");
+        shUnimPrint("(sh-strt) Layout setup");
+        //setupAppMaps();
+        AppFetcher appFetcher = new AppFetcher();
+        appFetcher.start();
         setupScenes();
         setupMan();
         setSubInfo();
@@ -178,33 +461,38 @@ public class Home extends Activity {
     @Override
     protected void onPause(){
         super.onPause();
-        setHidden(true);
+        if (sceneType == SceneType.MAXIMISED) transitTo(SceneType.MINIMISED);
     }
 
-    void setHidden(boolean state) {
-
-        plcBuff = shSTDOUT.buffer;
-
-        if (state) {
-            Log.d(TAG, "setHidden: HIDING");
-            TransitionManager.go(hiddenScene, t);
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(grantResults[0]== PackageManager.PERMISSION_GRANTED){
+            Log.v(TAG,"Permission: "+permissions[0]+ "was "+grantResults[0]);
+            //resume tasks needing this permission
         }
-        else {
-            Log.d(TAG, "setHidden: SHOWING");
-            TransitionManager.go(mainScene, t);
-        }
-
-        hidden = state;
-        setupLayout();
-        setSubInfo();
-
-        shSTDOUT.buffer = plcBuff;
-        shSTDOUT.refreshFromBuffer();
-
     }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent keyEvent) {
+        switch (sceneType) {
+            case MINIMISED:
+                return true;
+            case MAXIMISED:
+                transitTo(SceneType.MINIMISED);
+                return true;
+            case EDITOR:
+                shedQuitClicked(shEditor.shedIn);
+                return true;
+        }
+        return false;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// (RE) INIT ////////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
 
     void setupPreferences() {
-        Log.i(TAG, "SETTING UP PREFERENCES");
         shPref = getPreferences(MODE_PRIVATE);
         shPrefEditor = shPref.edit();
         defaultiseShPref("uname", "user");
@@ -213,22 +501,34 @@ public class Home extends Activity {
         shPrefEditor = null;
     }
 
-    void setupLayout() {
-        Log.i(TAG, "SETTING UP LAYOUT");
-        shSTDOUT = findViewById(R.id.shSTDOUT);
-        shSTDIN = findViewById(R.id.shSTDIN);
-        devInfo = findViewById(R.id.subinf);
-        Clock = findViewById(R.id.shlock);
-        shSTDOUT.setMovementMethod(new ScrollingMovementMethod());
-        shPrompt = getPrompt();
-        shSTDIN.setText(shPrompt);
-        shSTDIN.addTextChangedListener(tWatcher);
-
-        shSTDIN.requestFocus();
-
-        // Set font
+    void setupLayout(SceneType sc) {
         Typeface inc = Typeface.createFromAsset(getAssets(), "fonts/inconsolata.ttf");
-        setDefaultTypeface(inc);
+        switch (sc) {
+            case MINIMISED:
+            case MAXIMISED:
+                shSTDOUT = findViewById(R.id.shSTDOUT);
+                shSTDIN = findViewById(R.id.shSTDIN);
+                shInfo = findViewById(R.id.subinf);
+                shClock = findViewById(R.id.shlock);
+                shDate = findViewById(R.id.shdate);
+
+                shSTDOUT.setTypeface(inc);
+                shSTDIN.setTypeface(inc);
+                shInfo.setTypeface(inc);
+                shClock.setTypeface(inc);
+                shDate.setTypeface(inc);
+
+                shPrompt = getPrompt();
+                shSTDOUT.setMovementMethod(new ScrollingMovementMethod());
+                shSTDIN.setText(shPrompt);
+                shSTDIN.addTextChangedListener(tWatcher);
+                shSTDIN.requestFocus();
+                break;
+            case EDITOR:
+                shEditor = new ShaunEditor(inc, editorWatcher);
+                break;
+
+        }
     }
 
     void setupAppMaps() {
@@ -236,7 +536,7 @@ public class Home extends Activity {
         List<ApplicationInfo> lApps;
         lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
 
-        ignoreapps = new HashMap();
+        ignoreapps = new HashMap<>();
         ignoreapps.put("google", "");
 
         input2type = new HashMap<>();
@@ -253,6 +553,8 @@ public class Home extends Activity {
         input2type.put("grep", 2);
         input2type.put("man", 2);
         input2type.put("mc", 2);
+        input2type.put("shed", 2);
+        input2type.put("rm", 2);
 
         ALIASES = new HashMap<>();
         ALIASES.put("play", "google play store");
@@ -272,6 +574,7 @@ public class Home extends Activity {
                 input2type.put(label, 1);
             }
         }
+        shUnimPrint("(sh-strt) Applist loaded");
     }
 
     void setupScenes() {
@@ -280,6 +583,7 @@ public class Home extends Activity {
         rootScene = findViewById(R.id.root);
         hiddenScene = Scene.getSceneForLayout(rootScene, R.layout.hidden, this);
         mainScene = Scene.getSceneForLayout(rootScene, R.layout.main, this);
+        editorScene = Scene.getSceneForLayout(rootScene, R.layout.sheditor, this);
     }
 
     void setupMan() {
@@ -298,6 +602,98 @@ public class Home extends Activity {
         manmap.put("man", "Manual\nGiven the name of an app, returns its function and usage.\n\nUsage:\n  man <appname>");
     }
 
+    void defaultiseShPref(String key, String defval){
+        String res = shPref.getString(key, "unset");
+        if (res.equals("unset")) {
+            if (shPrefEditor != null) {
+                // editor already made: bulk changes
+                shPrefEditor.putString(key, defval);
+            }
+            else {
+                // no editor: remake here
+                shPrefEditor = shPref.edit();
+                shPrefEditor.putString(key, defval);
+                shPrefEditor.apply();
+            }
+        }
+    }
+
+    String[] trimArr(String[] toTrim) {
+        if (toTrim == null) return null;
+        ArrayList<String> tt = new ArrayList<>(Arrays.asList(toTrim));
+
+        for (int i = 0; i < toTrim.length; i++){
+            int j = toTrim.length - i - 1;
+            if (toTrim[j] == null || toTrim[j].equals("")){
+                tt.remove(j);
+            }
+        }
+
+        return tt.toArray(new String[tt.size()]);
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// UI & CONTROL /////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    boolean checkNGetWritePermission() {
+        if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            Log.v(TAG,"Permission is granted");
+            return true;
+        } else {
+
+            Log.v(TAG,"Permission is revoked");
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+        }
+
+        return (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED);
+    }
+
+    void inputTextChanged(CharSequence s, int start, int before, int count) {
+        if (s.length() < 1) {
+            return;
+        }
+        else if (s.length() < shPrompt.length()){
+            setStdin(shPrompt + prevCommand);
+            return;
+        }
+        else if (count < before){
+            return;
+        }
+        char c = s.charAt(start);
+        if (c == '\n') {
+            String ss = s.toString().replaceAll("\n", "");
+            setStdin(ss);
+
+            // do something with input
+            String entered = ss.substring(shPrompt.length());
+            prevCommand = entered;
+            int rv = shTabComplete(entered);
+            if (rv != 1) shUnimPrint("\n" + ss);
+            switch (rv) {
+                case 0: // no match
+                    shPrint(entered + ": command not found");
+                    resetStdin();
+                    break;
+                case 1: // partial match
+                    break;
+                case 2: // total match
+                    if (!entered.contains(" ")) {
+                        shExec(entered, null);
+                    }
+                    else {
+                        String command = entered.substring(0, entered.indexOf(" "));
+                        String[] args = entered.substring(entered.indexOf(" ")).split(" ");
+                        shExec(command, args);
+                    }
+                    break;
+                case 3:
+                    shExec(entered, null);
+                    break;
+            }
+        }
+    }
+
     int shTabComplete(String entered) {
         // takes "entered" text and compares to shApps
         // gets most complete app name
@@ -314,8 +710,8 @@ public class Home extends Activity {
             command = entered;
         }
 
-        String bestMatchName = "";
-        int bestMatchLength = 0;
+        String bestMatchName;
+        int bestMatchLength;
 
         String aliasres = ALIASES.get(command);
         if (aliasres != null) {
@@ -336,31 +732,13 @@ public class Home extends Activity {
         }
 
 
-        for (String k: input2type.keySet()) {
-            Log.d(TAG, "shTabComplete: " + command + " " + k);
-            if (entered.toLowerCase().equals(k)) {
-                // this should never be called: should be caught earlier
-                return 2;
-            }
-            else {
-                String sub_entered;
-                for (int j = 0; j < entered.length(); j++) {
-                    sub_entered = entered.substring(0, entered.length() - j).toLowerCase();
-                    Log.d(TAG, "shTabComplete: " + sub_entered);
-                    if (k.toLowerCase().startsWith(sub_entered)) {
-                        if (entered.length() - j > bestMatchLength) {
-                            bestMatchName = k;
-                            bestMatchLength = entered.length() - j;
-                            Log.d(TAG, "shTabComplete: potential match: " + k);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        Tuple<String, Integer> match = getBestMatch(entered, input2andrapp.keySet());
+        // do other autocompletion stuff
+
+        bestMatchName = match.x;
+        bestMatchLength = match.y;
 
         if (bestMatchLength > 0) {
-            //shPrint("non-unique, best match found");
             setStdin(shPrompt + bestMatchName);
             return 1;
         }
@@ -368,31 +746,32 @@ public class Home extends Activity {
         return 0;
     }
 
-    void hideStatusBar(){
-        View decorView = getWindow().getDecorView();
-        int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
-        decorView.setSystemUiVisibility(uiOptions);
-    }
+    Tuple<String, Integer> getBestMatch(String toCheck, Set<String> against){
+        int bestMatchLength = 0;
+        String bestMatchName = "";
 
-    void refreshUI(){
-        shPrompt = getPrompt();
-        setStdin(shPrompt);
-        setSubInfo();
-    }
+        if (against.contains(toCheck)) return new Tuple<>(toCheck, -1);
 
-    void defaultiseShPref(String key, String defval){
-        String res = shPref.getString(key, "unset");
-        if (res.equals("unset")) {
-            if (shPrefEditor != null) {
-                // editor already made: bulk changes
-                shPrefEditor.putString(key, defval);
+        for (String k: against) {
+            String sub_check;
+            for (int j = 0; j < toCheck.length(); j++) {
+                sub_check = toCheck.substring(0, toCheck.length() - j).toLowerCase();
+                if (k.toLowerCase().startsWith(sub_check)) {
+                    if (toCheck.length() - j > bestMatchLength) {
+                        bestMatchName = k;
+                        bestMatchLength = toCheck.length() - j;
+                        Log.d(TAG, "shTabComplete: potential match: " + k);
+                        break;
+                    }
+                }
             }
-            else {
-                // no editor: remake here
-                shPrefEditor = shPref.edit();
-                shPrefEditor.putString(key, defval);
-                shPrefEditor.apply();
-            }
+        }
+
+        if (bestMatchLength > 0) {
+            return new Tuple<>(bestMatchName, bestMatchLength);
+        }
+        else {
+            return new Tuple<>(toCheck, 0);
         }
     }
 
@@ -410,39 +789,130 @@ public class Home extends Activity {
         text += "shaun v" + version + "\n";
         text += "android: " + Build.VERSION.RELEASE + "\n";
         String[] dirs = shCurrentDirectory.split("/");
-        if (dirs.length > 2) {
+        if (SHVARS.get(shCurrentDirectory) != null) {
+            text += "[" + SHVARS.get(shCurrentDirectory) + "]";
+        }
+        else if (dirs.length > 2) {
             text += "[.../" + dirs[dirs.length - 1] + "]";
         }
         else {
             text += "[" + shCurrentDirectory + "]";
         }
-        devInfo.setText(text);
+        shInfo.setText(text);
     }
 
-    void setDefaultTypeface(Typeface tf){
-        ViewGroup viewgroup = findViewById(R.id.parv);
-        for (int i = 0; i < viewgroup.getChildCount(); i++) {
-            View v1 = viewgroup.getChildAt(i);
-            try{
-                TextView tv = (TextView) v1;
-                tv.setTypeface(tf);
-            }
-            catch (Exception e) {
-                try{
-                    InputBuffer et = (InputBuffer) v1;
-                    et.setTypeface(tf);
-                }
-                catch (Exception ee){
-                    try{
-                        TextClock tc = (TextClock) v1;
-                        tc.setTypeface(tf);
-                    }
-                    catch (Exception eee){
-                        // not a textview, edittext, or textclock
-                    }
-                }
-            }
+    void hideStatusBar(){
+        View decorView = getWindow().getDecorView();
+        int uiOptions = View.SYSTEM_UI_FLAG_FULLSCREEN;
+        decorView.setSystemUiVisibility(uiOptions);
+    }
+
+    void refreshUI(){
+        shPrompt = getPrompt();
+        setStdin(shPrompt);
+        setSubInfo();
+    }
+
+    public void clockClicked(View v) {
+        shExec("clock", null);
+    }
+
+    public void calClicked(View v) {
+        shExec("calendar", null);
+    }
+
+    public void shedSaveClicked(View v) {
+        if (!shEditor.filePath.equals("")) {
+            shEditor.writeBufferToFile();
         }
+        else {
+            getInput();
+        }
+    }
+
+    public void shedQuitClicked(View v) {
+        if (shEditor.canQuit()) {
+            transitTo(SceneType.MINIMISED);
+        }
+        else {
+            shEditor.flashMessage("Can't quit right now.");
+        }
+    }
+
+    public void shedNotifClicked(View v) {
+        shEditor.shedNotif.setVisibility(View.INVISIBLE);
+    }
+
+    void setHidden(boolean state) {
+
+        plcBuff = shSTDOUT.buffer;
+
+        if (state) {
+            transitTo(SceneType.MINIMISED);
+        }
+        else {
+            transitTo(SceneType.MAXIMISED);
+        }
+
+        setSubInfo();
+
+        shSTDOUT.buffer = plcBuff;
+        shSTDOUT.refreshFromBuffer();
+
+    }
+
+    boolean isHidden() {
+        return (sceneType == SceneType.MINIMISED);
+    }
+
+    void transitTo(SceneType sc) {
+        switch (sc) {
+            case MINIMISED:
+                TransitionManager.go(hiddenScene, transistion);
+                break;
+            case MAXIMISED:
+                TransitionManager.go(mainScene, transistion);
+                break;
+            case EDITOR:
+                TransitionManager.go(editorScene, transistion);
+                break;
+        }
+        setupLayout(sc);
+    }
+
+    void getInput(){
+        shEditor.filePath = null;
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("New file name:");
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT);
+        builder.setView(input);
+
+        builder.setPositiveButton("Save", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                shEditor.filePath = shCurrentDirectory + "/" + input.getText().toString();
+                shEditor.writeBufferToFile();
+            }
+        });
+        builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+            }
+        });
+        builder.show();
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// SHELL STUFF //////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
+    public String getPrompt(){
+        String shprompt = shPref.getString("uname", getResources().getString(R.string.uname)) + "@" + shPref.getString("hname", getResources().getString(R.string.hname)) + "> ";
+        shSTDIN.minSel = shprompt.length();
+        return shprompt;
     }
 
     public void resetStdin(){
@@ -455,52 +925,19 @@ public class Home extends Activity {
         this.shSTDIN.setSelection(ss.length());
     }
 
-    public String getPrompt(){
-        String shprompt = shPref.getString("uname", getResources().getString(R.string.uname)) + "@" + shPref.getString("hname", getResources().getString(R.string.hname)) + "> ";
-        shSTDIN.minSel = shprompt.length();
-        return shprompt;
-    }
+    void shPrint(String toPrint, String end) { shPrint(toPrint, end, true); }
 
-    String[] trimArr(String[] toTrim) {
-        if (toTrim == null) return null;
-        ArrayList<String> tt = new ArrayList<>(Arrays.asList(toTrim));
+    void shPrint(String toPrint) { shPrint(toPrint, "\n", true); }
 
-        for (int i = 0; i < toTrim.length; i++){
-            int j = toTrim.length - i - 1;
-            if (toTrim[j] == null || toTrim[j].equals("")){
-                tt.remove(j);
-            }
-        }
+    void shUnimPrint(String toPrint) { shPrint(toPrint, "\n", false); }
 
-        return tt.toArray(new String[tt.size()]);
-    }
-
-    public void clockClicked(View v) {
-        shExec("clock", null);
-    }
-
-    public void calClicked(View v) {
-        shExec("calendar", null);
-    }
-
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-    ///// SHELL STUFF //////////////////////////////////////////////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////////////////////////////
-
-    void shPrint(String toPrint) {
-        shPrint(toPrint, true);
-    }
-
-    void shUnimPrint(String toPrint) {
-        shPrint(toPrint, false);
-    }
-
-    void shPrint(String toPrint, boolean isImportant) {
+    void shPrint(String toPrint, String end, boolean isImportant) {
+        toPrint += end;
         if (redirect) {
             reBuff.add(toPrint);
         }
         else {
-            if (hidden && isImportant){
+            if (isHidden() && isImportant){
                 setHidden(false);
                 Thread.yield();
             }
@@ -521,40 +958,36 @@ public class Home extends Activity {
         else {
 
             try {
-                for (int i = 0; i < args.length; i++) {
-                    if (args[i].equals("|")) {
-                        if (args[i + 1].equals("grep")) {
-                            // pipe output
-                            // <cmnd> <cargs> | grep <pattern>
-                            // to
-                            // grep <pattern> <cmnd> <cargs>
-                            String nc = "grep";
-                            String[] na = new String[args.length - 1];
-                            na[0] = args[i + 2]; // pattern
-                            na[1] = command; // command
-                            System.arraycopy(args, 0, na, 2, args.length - 3);
+                if (args != null) {
+                    for (int i = 0; i < args.length; i++) {
+                        if (args[i].equals("|")) {
+                            if (args[i + 1].equals("grep")) {
+                                String nc = "grep";
+                                String[] na = new String[args.length - 1];
+                                na[0] = args[i + 2]; // pattern
+                                na[1] = command; // command
+                                System.arraycopy(args, 0, na, 2, args.length - 3);
 
-                            command = nc;
-                            args = na;
+                                command = nc;
+                                args = na;
 
-                            Log.d(TAG, "shExec: NC: " + nc);
-                            for (String s: na) {
-                                Log.d(TAG, "shExec:  ARGS:  " + s);
+                                Log.d(TAG, "shExec: NC: " + nc);
+                                for (String s : na) {
+                                    Log.d(TAG, "shExec:  ARGS:  " + s);
+                                }
+                                break;
                             }
-                            break;
                         }
                     }
                 }
-            } catch (Exception e) {
-                Log.d(TAG, "shExec: NOT GREP");
-            }
+            } catch (Exception e) {/*Pass*/}
 
             switch (command) {
                 case "ls":
                     shb_ls(args);
                     break;
                 case "url":
-                    shb_url(args[0]);
+                    shb_url(args);
                     break;
                 case "help":
                     shb_man(args);
@@ -589,6 +1022,12 @@ public class Home extends Activity {
                 case "mc":
                     shb_mc(args);
                     break;
+                case "shed":
+                    shb_shed(args);
+                    break;
+                case "rm":
+                    shb_rm(args);
+                    break;
                 default:
                     shPrint("Command " + command + " not found.");
                     break;
@@ -597,41 +1036,91 @@ public class Home extends Activity {
         }
     }
 
-    void shb_url(String url) {
-        if (!url.startsWith("https://") && !url.startsWith("http://")){
-            url = "http://" + url;
+    void shb_url(String[] args) {
+        boolean fine = true;
+
+        if (args == null) { fine = false; }
+        else if (args.length < 1){ fine = false; }
+
+        if (!fine) {
+            shPrint("Incorrect syntax. \n\nUsage:\n  url <address>");
+            return;
+        }
+
+        if (!args[0].startsWith("https://") && !args[0].startsWith("http://")){
+            args[0] = "http://" + args[0];
         }
         Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setData(Uri.parse(url));
+        i.setData(Uri.parse(args[0]));
         startActivity(i);
     }
 
     void shb_ls(String[] args) {
 
-        File directory;
+        if (args == null) args = new String[0];
 
-        if (args != null){
-            directory = new File(args[1]);
+        File directory = null;
+        boolean listify = false, allificate = false;
+
+        for (String s: args) {
+            Log.d(TAG, "shb_ls: " + s);
+            if (!s.startsWith("-")) {
+                try {
+                    directory = new File(s);
+                    Log.d(TAG, "shb_ls: SUCCESSFULLY OPENED FILE OF " + s);
+                } catch (Exception e) {
+                    shPrint("Unrecognised directory: \"" + s + "\"");
+                }
+            }
+            else {
+                for (char c : s.toCharArray()) {
+                    switch (c) {
+                        case 'a':
+                            allificate = true;
+                        case 'l':
+                            listify = true;
+                            break;
+                        case '-':
+                            break;
+                        default:
+                            shPrint("Unrecognised option. \n\nUsage:\n  ls [-la]");
+                            break;
+                    }
+                }
+            }
         }
-        else {
+
+        if (directory == null){
             directory = new File(shCurrentDirectory);
         }
 
         File[] files = directory.listFiles();
 
-        String prefx = "";
-        for (File f: files){
+        if (files == null) files = new File[0];
 
-            if (f.isDirectory()){
-                prefx = " D ";
-            }
-            else {
-                prefx = " F ";
-            }
+        if (files.length > 0) {
+            for (File f : files) {
+                String prefix = "", suffix = "";
 
-            shPrint(prefx + f.getName());
+                if (f.isDirectory()) {
+                    prefix = "[";
+                    suffix = "]";
+                }
+                else if (f.canExecute()) {
+                    suffix += "*";
+                }
+
+                String end = " ";
+                if (listify) end = "\n";
+                if (allificate) prefix = (new SimpleDateFormat("dd-MM-yyyy", Locale.UK)).format(f.lastModified()) + " " + prefix;
+                if (allificate || !f.isHidden()) {
+                    shPrint(prefix + f.getName() + suffix, end);
+                }
+            }
         }
-
+        else {
+            shPrint("\""+ directory.getPath()+ "\" is empty directory.");
+        }
     }
 
     void shb_cd(String[] args) {
@@ -647,11 +1136,11 @@ public class Home extends Activity {
         }
 
 
-        String newpath = "";
+        String newpath;
 
-        if (args[0].startsWith("$SD")){
+        if (args[0].startsWith("$SD") || args[0].startsWith("£SD")){
             newpath = Environment.getExternalStorageDirectory().getAbsolutePath() + args[0].replace("$SD", "");
-        }else if (args[0].contains("$SD")){
+        }else if (args[0].contains("$SD") || args[0].contains("£SD")){
             shPrint("Error. Absolute var must be used at begining of path.");
             return;
         }else {
@@ -661,12 +1150,15 @@ public class Home extends Activity {
 
         Log.d(TAG, "shb_cd: CHANGING DIR TO " + newpath);
         String[] npspl = newpath.split("/");
-        newpath = npspl[0];
+        StringBuilder sb = new StringBuilder();
+        sb.append(npspl[0]);
         for (int i = 1; i < npspl.length - 1; i++){
             if (!npspl[i + 1].equals("..")){
-                newpath += "/" + npspl[i];
+                sb.append("/");
+                sb.append(npspl[i]);
             }
         }
+        newpath = sb.toString();
         if (!npspl[npspl.length - 1].equals("..")){newpath += "/" + npspl[npspl.length - 1]; }
         if (newpath.equals("")){
             shPrint("Lack permissions to access root directory.");
@@ -779,17 +1271,13 @@ public class Home extends Activity {
         List<ApplicationInfo> lApps;
         lApps = getPackageManager().getInstalledApplications(PackageManager.GET_META_DATA);
 
-        boolean lowercasify = false, orderify = true, detailed = false;
+        boolean lowercasify = false, detailed = false;
 
         if (args != null){
 
             for (String a: args){
                 if (a.contains("l")) {
                     lowercasify = true;
-                }
-
-                if (a.contains("u")) {
-                    orderify = true;
                 }
 
                 if (a.contains("d")) {
@@ -814,14 +1302,12 @@ public class Home extends Activity {
             appNameList.add(appName);
         }
 
-        if (orderify) {
-            Collections.sort(appNameList, new Comparator<String>() {
-                @Override
-                public int compare(String s1, String s2) {
-                    return s1.compareToIgnoreCase(s2);
-                }
-            });
-        }
+        Collections.sort(appNameList, new Comparator<String>() {
+            @Override
+            public int compare(String s1, String s2) {
+                return s1.compareToIgnoreCase(s2);
+            }
+        });
 
         for (String s: appNameList) {
             shPrint(s);
@@ -856,15 +1342,16 @@ public class Home extends Activity {
         // https://stackoverflow.com/questions/27307265/control-playback-of-the-spotify-app-from-another-android-app
         int keycode = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
         if (args != null && args.length > 0) {
-            if (args[0].equals("next")) {
-                keycode = KeyEvent.KEYCODE_MEDIA_NEXT;
-            }
-            else if (args[0].equals("prev")) {
-                keycode = KeyEvent.KEYCODE_MEDIA_PREVIOUS;
-            }
-            else {
-                shPrint("Option not understood: " + args[0] + "\nAvailable options are:\n  next\n  prev\nor with no options to toggle playing.");
-                return;
+            switch (args[0]){
+                case "next":
+                    keycode = KeyEvent.KEYCODE_MEDIA_NEXT;
+                    break;
+                case "prev":
+                    keycode = KeyEvent.KEYCODE_MEDIA_PREVIOUS;
+                    break;
+                default:
+                    shPrint("Option not understood: " + args[0] + "\nAvailable options are:\n  next\n  prev\nor with no options to toggle playing.");
+                    return;
             }
         }
 
@@ -879,33 +1366,107 @@ public class Home extends Activity {
         }
     }
 
+    void shb_shed(String[] args) {
+        transitTo(SceneType.EDITOR);
+
+        if (args == null || args.length == 0) {
+            shEditor.shedFilePath.setText(R.string.newFileString);
+        }
+        else {
+            switch (shEditor.openFileToBuffer(shCurrentDirectory + "/" + args[0])) {
+                case -1:
+                    // could not open file
+                case 1:
+                    // opening new file
+                    // anything TODO here?
+                case 0:
+                default:
+                    break;
+            }
+        }
+    }
+
+    void shb_rm(String[] args) {
+        if (args == null || args.length != 1) {
+            shPrint("Remove what? Select a file to delete.");
+            return;
+        }
+
+        File f = new File(shCurrentDirectory + "/" + args[0]);
+
+        if (!f.exists()) {
+            shPrint("File is not existant.");
+            return;
+        }
+
+        if (f.isDirectory()) {
+            shPrint("Cannot delete file: is directory.");
+            return;
+        }
+
+        f.delete();
+
+        if (f.exists()) {
+            shPrint("File was not deleted!");
+        }
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+    ///// INTERPRETER //////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////////////////////////
+
     /*
-    * TODO:
-    *
-    *   - extend reach of settings apps:
-    *       - theming
-    *       - fontsize
-    *       - stuff like that
-    *   - Find better font for clock...
-    *   - Add date beneath clock (at least in hidden mode)
-    *       - Make it clickable, launches calander app
-    *       - can that be set default?
-    *       - could this be set via settings?
-    * */
+    Map<String, String> getGlobalVariables() {
+        Map<String, String> rv = new HashMap<>(0);
+        rv.put("", "");
+        return rv;
+    }
 
 
+    void interpret(String[] script) {
+
+        script = trimArr(script);
+
+        Map<String, String> script_memory = getGlobalVariables();
+
+        //TODO
+    }*/
+
     /*
-    *   KNOWN BUGS:
-    *
-    *   - When launching "PIXEL LAUNCHER" from SHAUN, bugs out
-    *
-    *       - "java.lang.NullPointerException: Attempt to invoke virtual method
-    *         'boolean android.content.Intent.migrateExtraStreamToClipData()'
-    *         on a null object reference"
-    *
-    *       - Just seems to be pixel launcher, not noticed it with other apps
-    *         (maybe its just for homescreen apps?)
-    * */
+     TODO:
+
+      - extend reach of settings apps:
+          - theming
+          - fontsize
+          - stuff like that
+      - Find better font for clock...
+      - Proper implementation of the pipe operator
+      - Built in text editor
+        - flashMessage() should run asyncronously
+      - (Ruby? PYTHON?) Extension interpreter
+      - Change input computation to a secondary thread (constantly listening
+        if a command is sent, executes when a command is detected -- keeps
+        execution off the main/UI thread).
+
+      KNOWN BUGS:
+
+      - When launching "PIXEL LAUNCHER" from SHAUN, bugs out
+
+          - "java.lang.NullPointerException: Attempt to invoke virtual method
+            'boolean android.content.Intent.migrateExtraStreamToClipData()'
+            on a null object reference"
+
+          - Just seems to be pixel launcher, not noticed it with other apps
+            (maybe its just for homescreen apps?)
+
+      - When deleting a subsequent file, many error messages show but the
+        deletion goes on without incident.
+
+          - No idea what is causing this. It seems to be an input error?
+
+          - There should be no way of the code repeating. Perhaps something
+            to do with the way the command is communicated to the program?
+    */
 
 
 }

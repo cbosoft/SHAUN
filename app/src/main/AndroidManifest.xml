@@ -4,6 +4,7 @@
     package="cbosoft.shaun">
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
@@ -15,7 +16,7 @@
         android:launchMode="singleTask"
         android:stateNotNeeded="true"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Wallpaper.NoTitleBar.Fullscreen"
+        android:theme="@style/Normal"
         tools:ignore="GoogleAppIndexingWarning">
 
         <activity

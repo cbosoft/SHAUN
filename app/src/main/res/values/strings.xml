@@ -3,6 +3,9 @@
 
     <string name="app_longname">SHell lAUNcher</string>
     <string name="version">0.2</string>
+    <string name="btnSaveTxt">Save</string>
+    <string name="btnQuitTxt">Quit</string>
     <string name="uname">user</string>
     <string name="hname">droid</string>
+    <string name="newFileString">-- NEW FILE --</string>
 </resources>

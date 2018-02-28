@@ -17,6 +17,7 @@
         android:background="@color/colorPrimary"
         android:layout_below="@id/border"
         android:layout_above="@id/shSTDIN"/>
+
     <ImageView
         android:id="@+id/top_bg"
         android:layout_width="match_parent"
@@ -27,6 +28,7 @@
         android:layout_marginRight="5dp"
         android:layout_marginTop="5dp"
         android:background="@color/colorPrimaryDark"/>
+
     <ImageView
         android:id="@+id/bottom_bg"
         android:layout_width="match_parent"
@@ -37,6 +39,7 @@
         android:layout_marginRight="5dp"
         android:layout_marginBottom="5dp"
         android:background="@color/colorPrimary"/>
+
     <ImageView
         android:id="@+id/border"
         android:layout_width="match_parent"
@@ -46,6 +49,7 @@
         android:layout_marginStart="5dp"
         android:layout_marginEnd="5dp"
         android:background="@color/colorAccent"/>
+
     <cbosoft.shaun.InputBuffer
         android:id="@+id/shSTDIN"
         android:layout_width="match_parent"
@@ -56,7 +60,12 @@
         android:layout_marginBottom="10dp"
         android:textColor="@color/colorText"
         android:textSize="8pt"
+        android:paddingTop="0dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:paddingBottom="0dp"
         android:backgroundTint="#00000000"/>
+
     <cbosoft.shaun.BufferView
         android:id="@+id/shSTDOUT"
         android:layout_width="match_parent"
@@ -74,6 +83,7 @@
         android:lineSpacingMultiplier="1.2"
         android:maxLines="1000"
         android:scrollbars="none"/>
+
     <TextClock
         android:id="@+id/shlock"
         android:layout_width="wrap_content"
@@ -89,6 +99,7 @@
         android:textColor="@color/colorText"
         android:textSize="50sp"
         android:textStyle="bold" />
+
     <TextClock
         android:id="@+id/shdate"
         android:layout_width="match_parent"
@@ -107,6 +118,7 @@
         android:textColor="@color/colorText"
         android:textSize="20sp"
         android:textStyle="bold"/>
+
     <TextView
         android:id="@+id/subinf"
         android:layout_width="match_parent"

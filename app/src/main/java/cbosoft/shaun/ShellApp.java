@@ -32,7 +32,7 @@ public class ShellApp {
         // To be as general as possible for this prototype,
         // a list of String args may be passed, as well as
         // key-value pair mapped kwargs (like a Python method)
-        // This can be overridden for apps which aren't just
+        // This can be overridden for apps which aren'transistion just
         // representations of android apps.
         Intent li = parent.getPackageManager().getLaunchIntentForPackage(this._ai.packageName);
         parent.startActivity(li);

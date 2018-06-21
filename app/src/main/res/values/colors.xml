@@ -1,2 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources></resources>
+<resources>
+    <color name="colorPrimary">#CC191919</color>
+    <color name="colorPrimaryDark">#CC141414</color>
+    <color name="colorAccent">#CC0088CC</color>
+    <color name="colorText">#DFDFDF</color>
+    <color name="colorGlass">#00000000</color>
+    <color name="colorPrimaryGlassy">#88191919</color>
+    <color name="colorPrimaryDarkGlassy">#88141414</color>
+</resources>

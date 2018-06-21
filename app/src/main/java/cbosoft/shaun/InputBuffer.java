@@ -2,7 +2,11 @@ package cbosoft.shaun;
 
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.widget.EditText;
+
+import static android.content.ContentValues.TAG;
 
 public class InputBuffer extends EditText {
 

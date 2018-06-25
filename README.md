@@ -36,9 +36,9 @@ Me, mostly. Or someone who doesn't mess about with fancy app drawers and complic
 SHAUN itself is GPL 3.0, and uses content as follows:
 
 #### Fonts
-  * [Runescape UF](https://www.dafont.com/runescape-uf.font) GPL/Public Domain (unclear)
-  * [Inconsolata](https://levien.com/type/myfonts/inconsolata.html) SIL Open Font License
-  * [DOS VGA 437](https://www.dafont.com/perfect-dos-vga-437.font) Free
-  * [Drucifer](https://github.com/drucifer/drucifer-monospace) SIL Open Font License
+  * [Runescape UF](https://www.dafont.com/runescape-uf.font) - GPL/Public Domain (unclear)
+  * [Inconsolata](https://levien.com/type/myfonts/inconsolata.html) - SIL Open Font License
+  * [DOS VGA 437](https://www.dafont.com/perfect-dos-vga-437.font) - Free
+  * [Drucifer](https://github.com/drucifer/drucifer-monospace) - SIL Open Font License
 ### Libraries
-  * [FuzzyWuzzy](https://github.com/xdrop/fuzzywuzzy) MIT License
+  * [FuzzyWuzzy](https://github.com/xdrop/fuzzywuzzy) - MIT License

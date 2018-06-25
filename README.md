@@ -16,7 +16,7 @@ Given that the goal of touchscreens has been to get **away** from keyboards, thi
 
 Chrome is maybe a bad example, most people have their web browser as a shortcut on their main homescreen. However, what is something that you do as soon as you open your web browser? Search for something! Having your fingers primed at the ready on the keyboard means this launching method could prove faster afterall! Its worth a try at least.
 
-What about the lesser used applications? What about Messenger? Sure, thats on there. Whatsapp too? What about SMS? That's a lot of messaging apps! What about Facebook? And Twitter? And Instagram? All on there? Jeez, that home screen is getting cluttered! This is where the power of the prompt comes in. From the prompt, a few key presses is all it takes to launch to get to your favourite apps!
+What about the lesser used applications? What about Messenger? Sure, you have a shortcut for that. Whatsapp too? What about SMS? That's a lot of messaging apps! What about Facebook? And Twitter? And Instagram? All on there? Jeez, that home screen is getting cluttered! This is where the power of the prompt comes in. From the prompt, a few key presses is all it takes to launch to get to your favourite apps!
 
 <h4 align="center">Who is this for?</h4>
 

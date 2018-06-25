@@ -9,31 +9,32 @@
     android:theme="@style/Normal"
     android:background="@color/colorGlass">
 
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:layout_margin="5dp"
+        android:background="?android:colorBackground">
+        <TextView
+            android:id="@+id/subinf"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textAlignment="center"
+            android:layout_margin="5dp"
+            android:textSize="5pt"
+            android:text="@string/debug_version"
+            android:textColor="?android:textColor"
+            android:background="@color/colorGlass"/>
+    </RelativeLayout>
     <ImageView
         android:id="@+id/top_bg"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_alignTop="@id/subinf"
+        android:layout_alignTop="@id/shlock"
         android:layout_alignBottom="@id/bottom_border"
-        android:clickable="true"
         android:layout_marginLeft="5dp"
         android:layout_marginRight="5dp"
-        android:layout_marginTop="0dp"
-        android:background="@color/colorPrimaryDarkGlassy"/>
-    <TextView
-        android:id="@+id/subinf"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:textAlignment="gravity"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp"
-        android:layout_marginStart="10dp"
-        android:layout_marginEnd="15dp"
-        android:textSize="5pt"
-        android:text="@string/debug_version"
-        android:layout_above="@id/shlock"
-        android:background="@color/colorGlass"/>
+        android:background="?android:colorBackground"/>
     <TextClock
         android:id="@+id/shlock"
         android:layout_width="match_parent"
@@ -45,6 +46,7 @@
         android:focusable="false"
         android:text="@string/time"
         android:onClick="clockClicked"
+        android:textColor="?android:textColor"
         android:layout_marginBottom="10dp"
         android:textSize="100sp"
         android:textStyle="bold"
@@ -69,7 +71,7 @@
         android:focusable="false"
         android:text="@string/date"
         android:onClick="calClicked"
-        android:textColor="@color/colorText"
+        android:textColor="?android:textColor"
         android:textSize="20sp"
         android:textStyle="bold"
         android:layout_above="@id/mid"
@@ -83,7 +85,7 @@
         android:layout_marginBottom="0dp"
         android:layout_marginStart="5dp"
         android:layout_marginEnd="5dp"
-        android:background="@color/colorAccent"/>
+        android:background="?android:colorAccent"/>
     <ImageView
         android:id="@+id/mid"
         android:layout_width="match_parent"
@@ -92,18 +94,43 @@
         android:layout_marginEnd="5dp"
         android:background="@color/colorGlass"
         android:layout_above="@id/shSTDIN" />
-    <TextView
-        android:id="@+id/op"
+    <RelativeLayout
+        android:id="@+id/shsuggest_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginStart="5dp"
-        android:layout_marginEnd="5dp"
-        android:layout_marginBottom="10dp"
-        android:gravity="bottom"
-        android:text="@string/command_hist"
-        android:background="@color/colorPrimaryDarkGlassy"
-        android:textSize="8pt"
-        android:layout_above="@id/shSTDIN" />
+        android:layout_above="@id/shSTDIN"
+        android:background="?android:colorBackground"
+        android:layout_marginLeft="5dp"
+        android:layout_marginRight="5dp"
+        android:layout_marginBottom="5dp">
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+            <TextView
+                android:id="@+id/suggest_offset"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="@string/prompt"
+                android:gravity="bottom"
+                android:background="@color/colorGlass"
+                android:textColor="?android:textColor"
+                android:textSize="8pt"
+                android:visibility="invisible"/>
+            <TextView
+                android:id="@+id/op"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="0dp"
+                android:layout_marginEnd="5dp"
+                android:layout_marginBottom="5dp"
+                android:gravity="bottom"
+                android:text="@string/command_hist"
+                android:background="@color/colorGlass"
+                android:textColor="?android:textColor"
+                android:textSize="8pt" />
+        </LinearLayout>
+    </RelativeLayout>
     <ImageView
         android:id="@+id/bottom_bg"
         android:layout_width="match_parent"
@@ -113,7 +140,7 @@
         android:layout_marginLeft="5dp"
         android:layout_marginRight="5dp"
         android:layout_marginBottom="5dp"
-        android:background="@color/colorPrimaryDarkGlassy"/>
+        android:background="?android:colorBackground"/>
     <cbosoft.shaun.InputBuffer
         android:id="@+id/shSTDIN"
         android:layout_width="match_parent"
@@ -122,8 +149,9 @@
         android:layout_marginStart="5dp"
         android:layout_marginEnd="5dp"
         android:layout_marginBottom="10dp"
-        android:textColor="@color/colorText"
+        android:textColor="?android:textColor"
         android:textSize="8pt"
+        android:text="@string/prompt"
         android:backgroundTint="@color/colorGlass"/>
 
 </RelativeLayout>

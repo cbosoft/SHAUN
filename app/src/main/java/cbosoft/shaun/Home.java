@@ -13,19 +13,18 @@ import android.os.Vibrator;
 import android.support.annotation.NonNull;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.transition.Scene;
 import android.util.Log;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.TextClock;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static android.content.ContentValues.TAG;
 
@@ -36,27 +35,26 @@ public class Home extends Activity {
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     // UI
+    // defaults
     final String defaultFont = "fonts/dosvga.ttf";
+    String clock = "com.android.clock";
+    String calendar = "com.google.android.calendar";
+
     // Main
+    RelativeLayout shSuggestedContainer;
     TextView shInfo, shSuggested;
     TextClock shClock, shDate;
     InputBuffer shSTDIN;
 
-    // Scenes
-    ViewGroup rootScene;
-    Scene hiddenScene;
-
     // Shell
-    String shPrompt, shBlank;
-    String pCommand;
+    String shPrompt;
     Typeface tf;
 
-    List<String> appNameList;
-    List<String> appNameList_searchable;
-    Map<String, String> ALIASES;
-    Map<String, Integer> input2type;
-    Map<String, String> input2andrapp;
+    List<InputCommand> commandList;
+    List<InputCommand> suggestionList;
+
     Map<String, String> ignoreapps;
+    Map<String, Integer> appUsage;
 
     SharedPreferences shPref;
     SharedPreferences.Editor shPrefEditor;
@@ -99,13 +97,11 @@ public class Home extends Activity {
         setupPreferences();
         setupLayout();
 
-        setupAppMaps();
+        //setupAppMaps();
         // or async:
-        //AppFetcher appFetcher = new AppFetcher();
-        //appFetcher.start();
+        AppFetcher appFetcher = new AppFetcher();
+        appFetcher.start();
 
-
-        setupScenes();
         setSubInfo();
 
     }
@@ -121,6 +117,13 @@ public class Home extends Activity {
     protected void onPause(){
         super.onPause();
         // anything else to do?
+        shPref = getPreferences(MODE_PRIVATE);
+        shPrefEditor = shPref.edit();
+        for (InputCommand ic : commandList) {
+            shPrefEditor.putInt(ic.appName, appUsage.get(ic.appName));
+        }
+        shPrefEditor.apply();
+        shPrefEditor = null;
     }
 
     @Override
@@ -153,6 +156,7 @@ public class Home extends Activity {
         shClock = findViewById(R.id.shlock);
         shDate = findViewById(R.id.shdate);
         shSuggested = findViewById(R.id.op);
+        shSuggestedContainer = findViewById(R.id.shsuggest_container);
 
         shSTDIN.setTypeface(tf);
         shInfo.setTypeface(tf);
@@ -162,6 +166,9 @@ public class Home extends Activity {
 
         shPrompt = getPrompt();
         shSTDIN.setText(shPrompt);
+        TextView shSuggestedOffset = findViewById(R.id.suggest_offset);
+        shSuggestedOffset.setText(shPrompt);
+        shSuggestedOffset.setTypeface(tf);
         try {
             shSTDIN.removeTextChangedListener(tWatcher);
         } catch (Exception e) {/* Pass */}
@@ -177,40 +184,37 @@ public class Home extends Activity {
         ignoreapps = new HashMap<>();
         ignoreapps.put("google", "");
 
-        input2type = new HashMap<>();
-        input2type.put("url", 2);
-        input2type.put("shset", 2);
-        input2type.put("apud", 2);
-
-        ALIASES = new HashMap<>();
-        ALIASES.put("play", "google play store");
-        ALIASES.put("amz", "amazon shopping");
-        ALIASES.put("apls", "app drawer");
-        ALIASES.put("fm", "file manager");
-        ALIASES.put("cal", "calendar");
-        ALIASES.put("ukp", "url https://www.reddit.com/r/ukpolitics");
-        ALIASES.put("cam", "blackberry camera");
-
-        input2andrapp = new HashMap<>();
-        appNameList = new ArrayList<>();
+        commandList = new ArrayList<>();
+        // built ins
+        commandList.add(new InputCommand("url", "(url) (https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9]\\.[^\\s]{2,})", "builtin", Boolean.TRUE));
+        commandList.add(new InputCommand("shset", "(shset) ((font ((runescape)|(inconsolata)|(drucifer)|(dosvga)))|(((uname)|(hname)) \\S+))", "builtin", Boolean.TRUE));
+        commandList.add(new InputCommand("apud", "apud", "builtin", Boolean.FALSE));
+        //aliases
+        commandList.add(new InputCommand("google play store", "play", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("amazon shopping", "amz", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("app drawer", "apls", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("file manager", "fm", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("calender", "cal", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("url https://www.reddit.com/r/ukpolitics", "ukp", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("blackberry camera", "cam", "alias", Boolean.FALSE));
+        //android
+        appUsage = new HashMap<>();
         for (int i = 0; i < lApps.size(); i++) {
             ApplicationInfo ai = lApps.get(i);
             PackageManager pm = getPackageManager();
             String label = ai.loadLabel(pm).toString().toLowerCase();
             if (ignoreapps.get(label) == null && ai.enabled && pm.getLaunchIntentForPackage(ai.packageName) != null) {
-                appNameList.add(label);
-                input2andrapp.put(label, ai.packageName);
-                input2type.put(label, 1);
+                commandList.add(new InputCommand(label, label, "android", ai.packageName));
+                if (ai.packageName.contains("clock")) {
+                    clock = ai.packageName;
+                }
             }
         }
-        appNameList.addAll(ALIASES.keySet());
-    }
+        suggestionList = commandList;
 
-    void setupScenes() {
-        Log.i(TAG, "SETTING UP SCENES");
-        // init scenes
-        rootScene = findViewById(R.id.root);
-        hiddenScene = Scene.getSceneForLayout(rootScene, R.layout.hidden, this);
+        for (InputCommand ic : commandList) {
+            appUsage.put(ic.appName, shPref.getInt(ic.appName, 0));
+        }
     }
 
     void defaultiseShPref(String key, String defval){
@@ -229,36 +233,15 @@ public class Home extends Activity {
         }
     }
 
-    String[] trimArr(String[] toTrim) {
-        if (toTrim == null) return null;
-        ArrayList<String> tt = new ArrayList<>(Arrays.asList(toTrim));
-
-        for (int i = 0; i < toTrim.length; i++){
-            int j = toTrim.length - i - 1;
-            if (toTrim[j] == null || toTrim[j].equals("")){
-                tt.remove(j);
-            }
-        }
-
-        return tt.toArray(new String[tt.size()]);
-    }
-
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///// UI & CONTROL /////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////////////
 
     void alert() {
-        vibe(500);
-    }
-
-//    void notif() {
-//        vibe(100);
-//    }
-
-    void vibe(int mil) {
+        Log.d(TAG, "alert: ALERT");
         try {
             Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-            v.vibrate(mil);
+            v.vibrate(500);
         }
         catch (java.lang.NullPointerException ex) {/* Pass */}
     }
@@ -289,134 +272,88 @@ public class Home extends Activity {
             String ss = s.toString().replaceAll("\n", "");
             setStdin(ss);
 
-            // do something with input
+            Log.d(TAG, "inputTextChanged: punch it chewey!");
             String entered = ss.substring(shPrompt.length());
-            if (shSuggested.getVisibility() == View.VISIBLE && appNameList_searchable.size() > 0) {
-                entered = appNameList_searchable.get(appNameList_searchable.size() - 1);
-                setStdin(shPrompt + entered);
+            if (shSuggestedContainer.getVisibility() == View.VISIBLE && suggestionList.size() > 0) {
+                Log.d(TAG, "inputTextChanged: inputcommlaunch" + entered);
+                launch(suggestionList.get(suggestionList.size() - 1));
             }
-            dealWithInput(entered);
+            else {
+                Log.d(TAG, "inputTextChanged: stringlaunch" + entered);
+                launch(entered);
+            }
         }
         else {
             suggestApps(s.toString().substring(shPrompt.length()));
         }
     }
 
-    void dealWithInput(String entered) {
-        int rv = shTabComplete(entered);
-        if (rv == 2 || rv == 3) {
-            pCommand = entered;
-        }
-        switch (rv) {
-            case 0: // no match
-                alert();
-                resetStdin();
-                break;
-            case 1: // partial match
-                break;
-            case 2: // total match
-                if (!entered.contains(" ")) {
-                    shExec(entered, null);
-                }
-                else {
-                    String command = entered.substring(0, entered.indexOf(" "));
-                    String[] args = entered.substring(entered.indexOf(" ")).split(" ");
-                    shExec(command, args);
-                }
-                break;
-            case 3:
-                shExec(entered, null);
-                break;
-        }
-    }
+    InputCommand getCommand(String input) {
+        /*
+        * Searches for most likely match and returns it
+        * */
 
-    int shTabComplete(String entered) {
-        // takes "entered" text and compares to shApps
-        // gets most complete app name
-        // returns an int indicating how the completion went:
-        //      0: did not match anything
-        //      1: partially complete
-        //      3: complete + unique
-
-        String command;
-        if (entered.contains(" ")){
-            command = entered.substring(0, entered.indexOf(" "));
-        }
-        else {
-            command = entered;
+        List<List<Object>> likelihoods = new ArrayList<>();
+        for (InputCommand ic : commandList) {
+            List<Object> lo = new ArrayList<>();
+            int rv = ic.matches(input);
+            if (rv == 0) continue;
+            lo.add(rv);
+            lo.add(ic);
+            likelihoods.add(lo);
         }
 
-        String bestMatchName;
-        int bestMatchLength;
-
-        Log.d(TAG, "shTabComplete: pre alias");
-        String aliasres = ALIASES.get(command);
-        if (aliasres != null) {
-            // setStdin(shPrompt + aliasres);
-            dealWithInput(aliasres);
-            return 1;
-        }
-
-        Log.d(TAG, "shTabComplete: pre ain2ty");
-        Object res = input2type.get(entered.toLowerCase());
-        if (res != null) {
-            // android app or built in app, no args, command contains " "
-            return 3;
-        }
-
-        res = input2type.get(command.toLowerCase());
-        if (res != null) {
-            // android app or built in app, with args, command contains no " "
-            return 2;
-        }
-
-
-        Tuple<String, Integer> match = getBestMatch(entered, input2andrapp.keySet());
-        // do other autocompletion stuff
-
-        bestMatchName = match.x;
-        bestMatchLength = match.y;
-
-        if (bestMatchLength > 0) {
-            // setStdin(shPrompt + bestMatchName);
-            shExec(bestMatchName, null);
-            return 1;
-        }
-
-        return 0;
-    }
-
-    Tuple<String, Integer> getBestMatch(String toCheck, Set<String> against){
-        int bestMatchLength = 0;
-        String bestMatchName = "";
-
-        if (against.contains(toCheck)) return new Tuple<>(toCheck, -1);
-
-        for (String k: against) {
-            String sub_check;
-            for (int j = 0; j < toCheck.length(); j++) {
-                sub_check = toCheck.substring(0, toCheck.length() - j).toLowerCase();
-                if (k.toLowerCase().startsWith(sub_check)) {
-                    if (toCheck.length() - j > bestMatchLength) {
-                        bestMatchName = k;
-                        bestMatchLength = toCheck.length() - j;
-                        Log.d(TAG, "shTabComplete: potential match: " + k);
-                        break;
-                    }
-                }
+        Collections.sort(likelihoods, new Comparator<List<Object>>() {
+            @Override
+            public int compare(List<Object> lhs, List<Object> rhs) {
+                return Integer.compare((int)lhs.get(0), (int)rhs.get(0));
             }
-        }
+        });
 
-        if (bestMatchLength > 0) {
-            return new Tuple<>(bestMatchName, bestMatchLength);
-        }
-        else {
-            return new Tuple<>(toCheck, 0);
+        Log.d(TAG, "getCommand: " + Integer.toString((int)likelihoods.get(0).get(0)) + " :: " + ((InputCommand)likelihoods.get(0).get(1)).appName);
+
+        return (InputCommand)likelihoods.get(0).get(1);
+    }
+
+    void launch(String input) {
+        launch(getCommand(input));
+    }
+
+    void launch(InputCommand ic) {
+        /*
+         * Given an input string, determines how to launch it, then does that
+         * */
+
+        setStdin(shPrompt);
+        appUsage.put(ic.appName, appUsage.get(ic.appName) + 1);
+
+        switch (ic.appType) {
+            case "builtin":
+                switch (ic.appName) {
+                    case "url":
+                        shb_url(ic.getLaunchArgs());
+                        break;
+                    case "shset":
+                        Log.d(TAG, "launch: " + ic.userInput);
+                        shb_shset(ic.getLaunchArgs());
+                        break;
+                    case "apud":
+                        shb_apmud();
+                        break;
+                }
+                break;
+            case "android":
+                Intent li = getPackageManager().getLaunchIntentForPackage(ic.packageName);
+                startActivity(li);
+                break;
+            case "alias":
+                launch(ic.appName);
+                break;
         }
     }
 
     void setSubInfo(){
-        String version = "vXX", text = "";
+        String version = "X.X.XXX", text = "";
         PackageInfo pInfo;
         try {
             pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
@@ -424,7 +361,7 @@ public class Home extends Activity {
         } catch (Exception e) {
             // pass
         }
-        text += "[" + version + "]";
+        text += "v" + version + "";
         shInfo.setText(text);
     }
 
@@ -441,47 +378,61 @@ public class Home extends Activity {
     }
 
     public void clockClicked(View v) {
-        shExec("clock", null);
+        //shExec("clock", null);
+        Intent li = getPackageManager().getLaunchIntentForPackage(clock);
+        startActivity(li);
     }
 
     public void calClicked(View v) {
-        shExec("calendar", null);
-    }
+        //shExec("calendar", null);
+        Intent li = getPackageManager().getLaunchIntentForPackage(calendar);
+        startActivity(li);
+}
 
     void suggestApps(String entered) {
-
         if (entered.length() == 0) {
-            shSuggested.setVisibility(View.INVISIBLE);
+            shSuggestedContainer.setVisibility(View.INVISIBLE);
+            shSuggested.setText("");
             return;
         }
         else{
-            shSuggested.setVisibility(View.VISIBLE);
+            shSuggestedContainer.setVisibility(View.VISIBLE);
         }
 
-        if (entered.length() == 1) {
-            appNameList_searchable = new ArrayList<>();
-            for (String appName: appNameList) {
-                if (appName.startsWith(entered)) {
-                    appNameList_searchable.add(appName);
-                }
-            }
+        suggestionList = commandList;
+
+        // get matching suggestions
+        List<List<Object>> likelihoods = new ArrayList<>();
+        for (InputCommand ic : suggestionList) {
+            List<Object> lo = new ArrayList<>();
+            int rv = ic.matches(entered);
+            if (rv == 0) continue;
+            Log.d(TAG, "suggestApps: " + ic.appName + " :: " + Integer.toString(rv) + " :: " + Integer.toString(appUsage.get(ic.appName)));
+            rv += appUsage.get(ic.appName);
+            lo.add(rv);
+            lo.add(ic);
+            likelihoods.add(lo);
         }
-        else {
-            List<String> temp = new ArrayList<>();
-            for (String appName: appNameList_searchable) {
-                if (appName.startsWith(entered)) {
-                    temp.add(appName);
-                }
+
+        Collections.sort(likelihoods, new Comparator<List<Object>>() {
+            @Override
+            public int compare(List<Object> lhs, List<Object> rhs) {
+                return Integer.compare((int)lhs.get(0), (int)rhs.get(0));
             }
-            appNameList_searchable = temp;
+        });
+
+        suggestionList = new ArrayList<>();
+        for (List<Object> tu: likelihoods){
+            suggestionList.add((InputCommand)tu.get(1));
         }
+
+        // display
         StringBuilder sb = new StringBuilder();
-        for (String appName: appNameList_searchable) {
+        for (InputCommand ic: suggestionList) {
             sb.append("\n");
-            sb.append(shBlank);
-            sb.append(appName);
+            if (ic.appType.equals("alias")) sb.append(ic.inputRegex);
+            else sb.append(ic.appName);
         }
-        sb.append("\n");
         shSuggested.setText(sb.toString());
     }
 
@@ -492,11 +443,6 @@ public class Home extends Activity {
     public String getPrompt(){
         String shprompt = shPref.getString("uname", getResources().getString(R.string.uname)) + "@" + shPref.getString("hname", getResources().getString(R.string.hname)) + "> ";
         shSTDIN.minSel = shprompt.length();
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < shprompt.length(); i++) {
-            sb.append(" ");
-        }
-        shBlank = sb.toString();
         return shprompt;
     }
 
@@ -508,63 +454,6 @@ public class Home extends Activity {
     public void setStdin(String ss) {
         this.shSTDIN.setText(ss, TextView.BufferType.EDITABLE);
         this.shSTDIN.setSelection(ss.length());
-    }
-
-    public void shExec(String command, String[] args) {
-        Log.d(TAG, "shExec: " + command);
-        resetStdin();
-
-        if (args != null) args = trimArr(args);
-
-        if (input2type.get(command) == 1) {
-            Intent li = getPackageManager().getLaunchIntentForPackage(input2andrapp.get(command));
-            startActivity(li);
-        }
-        else {
-
-            try {
-                if (args != null) {
-                    for (int i = 0; i < args.length; i++) {
-                        if (args[i].equals("|")) {
-                            if (args[i + 1].equals("grep")) {
-                                String nc = "grep";
-                                String[] na = new String[args.length - 1];
-                                na[0] = args[i + 2]; // pattern
-                                na[1] = command; // command
-                                System.arraycopy(args, 0, na, 2, args.length - 3);
-
-                                command = nc;
-                                args = na;
-
-                                Log.d(TAG, "shExec: NC: " + nc);
-                                for (String s : na) {
-                                    Log.d(TAG, "shExec:  ARGS:  " + s);
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-            } catch (Exception e) {/*Pass*/}
-
-            if (args == null) args = new String[0];
-
-            switch (command) {
-                case "url":
-                    shb_url(args);
-                    break;
-                case "shset":
-                    shb_shset(args);
-                    break;
-                case "apud":
-                    shb_apmud();
-                    break;
-                default:
-                    alert();
-                    break;
-
-            }
-        }
     }
 
     void shb_url(String[] args) {
@@ -586,15 +475,23 @@ public class Home extends Activity {
     }
 
     void shb_shset(String[] args) {
-
+        Log.d(TAG, "shb_shset: IN SHSET");
         boolean fine = true;
 
-        if (args == null){fine = false;}
+        if (args == null){
+            fine = false;
+            args = new String[0];
+        }
         else if (args.length == 0){fine = false;}
         else if (args.length == 1 && !args[0].equals("help")){fine = false;}
         else if (args.length > 2){fine = false;}
 
+        for (String s : args) {
+            Log.d(TAG, "shb_shset: "+s);
+        }
+
         if (!fine){
+            Log.d(TAG, "shb_shset: args not fine!");
             alert();
         }
         else {
@@ -627,6 +524,5 @@ public class Home extends Activity {
         appFetcher.start();
 
     }
-
 
 }

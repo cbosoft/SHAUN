@@ -150,6 +150,7 @@ public class Home extends Activity {
     }
 
     void setupLayout() {
+        // TypefaceUtil.overrideFont(getApplicationContext(), "SERIF", "fonts/your_font_file.ttf");
         tf = Typeface.createFromAsset(getAssets(), shPref.getString("font", defaultFont));
         shSTDIN = findViewById(R.id.shSTDIN);
         shInfo = findViewById(R.id.subinf);

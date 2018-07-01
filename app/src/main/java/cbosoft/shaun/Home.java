@@ -39,7 +39,8 @@ public class Home extends Activity {
     final String defaultFont = "fonts/dosvga.ttf";
     String clock = "com.android.clock";
     String calendar = "com.google.android.calendar";
-
+    Boolean appsReady = Boolean.FALSE;
+    
     // Main
     RelativeLayout shSuggestedContainer;
     TextView shInfo, shSuggested;
@@ -79,7 +80,9 @@ public class Home extends Activity {
         AppFetcher() { }
 
         public void run() {
+	    appsReady = Boolean.FALSE;
             setupAppMaps();
+	    appsReady = Boolean.TRUE;
         }
     }
 
@@ -248,6 +251,7 @@ public class Home extends Activity {
     }
 
     void inputTextChanged(CharSequence s, int start, int before, int count) {
+	if (!appsReady) return;
         suggestApps("");
         
         if (s.length() < 1) {

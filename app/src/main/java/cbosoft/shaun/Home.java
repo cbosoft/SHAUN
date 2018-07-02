@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Vibrator;
+import android.renderscript.ScriptGroup;
 import android.support.annotation.NonNull;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -189,18 +190,40 @@ public class Home extends Activity {
         ignoreapps.put("google", "");
 
         commandList = new ArrayList<>();
+
         // built ins
-        commandList.add(new InputCommand("url", "(url) (https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9]\\.[^\\s]{2,})", "builtin", Boolean.TRUE));
-        commandList.add(new InputCommand("shset", "(shset) ((font ((runescape)|(inconsolata)|(drucifer)|(dosvga)))|(((uname)|(hname)) \\S+))", "builtin", Boolean.TRUE));
-        commandList.add(new InputCommand("apud", "apud", "builtin", Boolean.FALSE));
+        commandList.add(
+                new InputCommand(
+                        "url",
+                        "(url) (https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\\.[^\\s]{2,}|https?:\\/\\/(?:www\\.|(?!www))[a-zA-Z0-9]\\.[^\\s]{2,}|www\\.[a-zA-Z0-9]\\.[^\\s]{2,})",
+                        "url <url>",
+                        Boolean.TRUE
+                )
+        );
+        commandList.add(
+                new InputCommand(
+                        "shset",
+                        "(shset) ((font ((runescape)|(inconsolata)|(drucifer)|(dosvga)))|(((uname)|(hname)) \\S+))",
+                        "shset <option> <value>",
+                        Boolean.TRUE
+                )
+        );
+        commandList.add(
+                new InputCommand(
+                        "apud",
+                        "apud",
+                        "apud",
+                        Boolean.FALSE
+                )
+        );
+
         //aliases
-        commandList.add(new InputCommand("google play store", "play", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("amazon shopping", "amz", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("app drawer", "apls", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("file manager", "fm", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("calender", "cal", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("url https://www.reddit.com/r/ukpolitics", "ukp", "alias", Boolean.FALSE));
-        commandList.add(new InputCommand("blackberry camera", "cam", "alias", Boolean.FALSE));
+        commandList.add(new InputCommand("google play store", "play"));
+        commandList.add(new InputCommand("amazon shopping", "amz"));
+        commandList.add(new InputCommand("file manager", "fm"));
+        commandList.add(new InputCommand("url https://www.reddit.com/r/ukpolitics", "ukp"));
+        commandList.add(new InputCommand("blackberry camera", "cam"));
+
         //android
         appUsage = new HashMap<>();
         for (int i = 0; i < lApps.size(); i++) {
@@ -208,10 +231,11 @@ public class Home extends Activity {
             PackageManager pm = getPackageManager();
             String label = ai.loadLabel(pm).toString().toLowerCase();
             if (ignoreapps.get(label) == null && ai.enabled && pm.getLaunchIntentForPackage(ai.packageName) != null) {
-                commandList.add(new InputCommand(label, label, "android", ai.packageName));
+                commandList.add(new InputCommand(label, label, ai.packageName));
                 if (ai.packageName.contains("clock")) {
                     clock = ai.packageName;
                 }
+
             }
         }
         suggestionList = commandList;
@@ -251,8 +275,8 @@ public class Home extends Activity {
     }
 
     void inputTextChanged(CharSequence s, int start, int before, int count) {
-	if (!appsReady) return;
         suggestApps("");
+        if (!appsReady) return;
         
         if (s.length() < 1) {
             // somehow, there are no contents in the stdin buffer...
@@ -280,7 +304,7 @@ public class Home extends Activity {
             Log.d(TAG, "inputTextChanged: punch it chewey!");
             String entered = ss.substring(shPrompt.length());
             if (shSuggestedContainer.getVisibility() == View.VISIBLE && suggestionList.size() > 0) {
-                Log.d(TAG, "inputTextChanged: inputcommlaunch" + entered);
+                Log.d(TAG, "inputTextChanged: inputcommlaunch " + entered);
                 launch(suggestionList.get(suggestionList.size() - 1));
             }
             else {
@@ -297,7 +321,7 @@ public class Home extends Activity {
         /*
         * Searches for most likely match and returns it
         * */
-
+        Log.d(TAG, "getCommand: Matching: " + input);
         List<List<Object>> likelihoods = new ArrayList<>();
         for (InputCommand ic : commandList) {
             List<Object> lo = new ArrayList<>();
@@ -306,34 +330,45 @@ public class Home extends Activity {
             lo.add(rv);
             lo.add(ic);
             likelihoods.add(lo);
+            Log.d(TAG, "getCommand: " + ic.appName + " " + Integer.toString(rv));
         }
 
         Collections.sort(likelihoods, new Comparator<List<Object>>() {
             @Override
             public int compare(List<Object> lhs, List<Object> rhs) {
-                return Integer.compare((int)lhs.get(0), (int)rhs.get(0));
+                return Integer.compare((int)rhs.get(0), (int)lhs.get(0));
             }
         });
 
+        if (likelihoods.size() == 0){
+            return null;
+        }
+
         Log.d(TAG, "getCommand: " + Integer.toString((int)likelihoods.get(0).get(0)) + " :: " + ((InputCommand)likelihoods.get(0).get(1)).appName);
+
 
         return (InputCommand)likelihoods.get(0).get(1);
     }
 
     void launch(String input) {
-        launch(getCommand(input));
+        try {
+            launch(getCommand(input));
+        }
+        catch (Exception ex) {
+            resetStdin();
+            alert();
+        }
     }
 
     void launch(InputCommand ic) {
         /*
          * Given an input string, determines how to launch it, then does that
          * */
-
         setStdin(shPrompt);
         appUsage.put(ic.appName, appUsage.get(ic.appName) + 1);
 
         switch (ic.appType) {
-            case "builtin":
+            case BUILTIN:
                 switch (ic.appName) {
                     case "url":
                         shb_url(ic.getLaunchArgs());
@@ -347,12 +382,19 @@ public class Home extends Activity {
                         break;
                 }
                 break;
-            case "android":
+            case ANDROID:
                 Intent li = getPackageManager().getLaunchIntentForPackage(ic.packageName);
                 startActivity(li);
                 break;
-            case "alias":
-                launch(ic.appName);
+            case ALIAS:
+                ic = getCommand(ic.appName);
+                if (ic != null) {
+                    launch(ic);
+                }
+                else {
+                    alert();
+                    resetStdin();
+                }
                 break;
         }
     }
@@ -435,8 +477,7 @@ public class Home extends Activity {
         StringBuilder sb = new StringBuilder();
         for (InputCommand ic: suggestionList) {
             sb.append("\n");
-            if (ic.appType.equals("alias")) sb.append(ic.inputRegex);
-            else sb.append(ic.appName);
+            sb.append(ic.getDisplayString());
         }
         shSuggested.setText(sb.toString());
     }

@@ -3,6 +3,6 @@
     <string name="debug_version">v0.9.XXX</string>
     <string name="date">02 February 2018</string>
     <string name="time">23:59</string>
-    <string name="command_hist">command\nanother\nyet another\nmoar</string>
+    <string name="command_hist">command\ncommand\ncommand</string>
     <string name="prompt">root@droid> </string>
 </resources>

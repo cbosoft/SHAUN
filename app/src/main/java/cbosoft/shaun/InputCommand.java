@@ -3,7 +3,6 @@ package cbosoft.shaun;
 import android.util.Log;
 
 import java.util.Arrays;
-import java.util.Map;
 
 import me.xdrop.fuzzywuzzy.FuzzySearch;
 
@@ -13,26 +12,39 @@ public class InputCommand {
 
     String appName;
 
-    String appType;
-    String inputRegex;
+    AppType appType;
     String packageName;
     String userInput;
+    InputCommand aliasFor;
 
-    Boolean needsArgs = Boolean.FALSE;
+    private String inputRegex;
+    private String usageString;
+
+    private Boolean needsArgs = Boolean.FALSE;
 
 
-    public InputCommand(String appName, String regex, String appType, Boolean needsArgs) {
+    // builtins
+    InputCommand(String appName, String regex, String usageString, Boolean needsArgs) {
         this.appName = appName;
         this.inputRegex = regex;
-        this.appType = appType;
+        this.appType = AppType.BUILTIN;
+        this.usageString = usageString;
         this.needsArgs = needsArgs;
     }
 
-    public InputCommand(String appName, String regex, String appType, String packageName) {
+    // android
+    InputCommand(String appName, String regex, String packageName) {
         this.appName = appName;
         this.inputRegex = regex;
-        this.appType = appType;
+        this.appType = AppType.ANDROID;
         this.packageName = packageName;
+    }
+
+    // alias
+    InputCommand(String appName, String regex) {
+        this.appName = appName;
+        this.inputRegex = regex;
+        this.appType = AppType.ALIAS;
     }
 
     public int matches(String input) {
@@ -42,15 +54,26 @@ public class InputCommand {
             return 100;
         }
 
-        //if (this.appType.equals("alias")) return 0;
-
         int res = FuzzySearch.ratio(appName, input);
 
-        if (appName.startsWith(input)) res += 50;
-        if (this.needsArgs && appName.startsWith(input)) res += 50;
+        if (appName.startsWith(input)) res += 50; // prefer apps which match input
+        if (this.needsArgs && appName.startsWith(input.split(" ")[0])) res += 50; // to offset the lack of fuzzy matching otherwise
+        if (this.appType == AppType.ALIAS && input.equals(this.appName)) return 0; // don't match alias if input is exact
 
         if (res < 50) return 0;
         return res;
+    }
+
+    public String getDisplayString() {
+        switch (this.appType) {
+            case ALIAS:
+                return this.inputRegex + " (" + this.appName + ")";
+            case ANDROID:
+                return this.appName;
+            case BUILTIN:
+                return this.usageString;
+        }
+        return this.appName;
     }
 
     public String[] getLaunchArgs(){

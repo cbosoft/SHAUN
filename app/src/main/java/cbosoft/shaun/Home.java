@@ -497,6 +497,11 @@ public class Home extends Activity {
         return shprompt;
     }
 
+    public String getUserInput() {
+        String fullString = shSTDIN.getText().toString();
+        return fullString.substring(getPrompt().length());
+    }
+
     public void resetStdin(){
         this.shSTDIN.setText(shPrompt, TextView.BufferType.EDITABLE);
         this.shSTDIN.setSelection(shPrompt.length());

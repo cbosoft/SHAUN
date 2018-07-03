@@ -15,7 +15,6 @@ public class InputCommand {
     AppType appType;
     String packageName;
     String userInput;
-    InputCommand aliasFor;
 
     private String inputRegex;
     private String usageString;

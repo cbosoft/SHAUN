@@ -37,7 +37,11 @@ Me, mostly. Or anyone who doesn't mess about with fancy app drawers and complica
 
 If you want to install the launcher download this repo, build the source, and transfer the APK to your phone.
 
-I'm not all too familiar with the android build process at the moment. At the moment I stick to `C-F9` to get an output APK. So I don't want to commmit to providing pre-built APKs. Plus, your Android version may have some oddities that the version I tend to build to (Android 7.0, SDK ver 25) might not have. I do plan to perhaps put this onto Google Play at some point in the future, if it ever gets to a point where I'm happy with it.
+Running 
+```bash
+./gradlew assembleDebug
+```
+should be sufficient to get a working .apk in the `app/build/outputs/apk/debug/` folder.
 
 <h1 align="center">Licence Stuff</h1>
 

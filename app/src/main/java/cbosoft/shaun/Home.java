@@ -13,6 +13,7 @@ import android.os.Vibrator;
 import android.renderscript.ScriptGroup;
 import android.support.annotation.NonNull;
 import android.text.Editable;
+import android.text.Html;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.widget.RelativeLayout;
@@ -476,11 +477,14 @@ public class Home extends Activity {
 
         // display
         StringBuilder sb = new StringBuilder();
+        int i = 0;
         for (InputCommand ic: suggestionList) {
-            sb.append("\n");
-            sb.append(ic.getDisplayString());
+            if (i != 0) sb.append("<br>");
+            else i++;
+
+            sb.append(ic.getDisplayString(appUsage.get(ic.appName)));
         }
-        shSuggested.setText(sb.toString());
+        shSuggested.setText(Html.fromHtml(sb.toString(), 0));
     }
 
     ////////////////////////////////////////////////////////////////////////////////////////////////

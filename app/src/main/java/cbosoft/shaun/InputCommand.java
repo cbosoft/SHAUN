@@ -1,5 +1,6 @@
 package cbosoft.shaun;
 
+import android.graphics.Color;
 import android.util.Log;
 
 import java.util.Arrays;
@@ -48,6 +49,7 @@ public class InputCommand {
 
     public int matches(String input) {
         this.userInput = input;
+        if (this.appType == AppType.ALIAS && input.equals(this.appName)) return 0; // don't match alias if input is exact
         if (input.matches(inputRegex)) {
             Log.d(TAG, "matches: " + input);
             return 100;
@@ -57,22 +59,47 @@ public class InputCommand {
 
         if (appName.startsWith(input)) res += 50; // prefer apps which match input
         if (this.needsArgs && appName.startsWith(input.split(" ")[0])) res += 50; // to offset the lack of fuzzy matching otherwise
-        if (this.appType == AppType.ALIAS && input.equals(this.appName)) return 0; // don't match alias if input is exact
-
+        if (this.appType == AppType.ALIAS) res += 25; // prefer alias, if not already matching
         if (res < 50) return 0;
+
         return res;
     }
 
-    public String getDisplayString() {
+    public String getDisplayString(int usageCount) {
+        String name = this.appName, info = " ";
+
+        String nmColor = "#AAAAAF";
+        String ucColor = "#666666";
+        String ifColor = "#3388CC";
+
+        String ucString;
+
         switch (this.appType) {
             case ALIAS:
-                return this.inputRegex + " (" + this.appName + ")";
-            case ANDROID:
-                return this.appName;
+                name =  this.inputRegex;
+                info += "[ALIAS->" + this.appName + "]";
+                break;
             case BUILTIN:
-                return this.usageString;
+                name = this.usageString;
+                info += "[SH]";
+                break;
+            case ANDROID:
+                info += "[APK]";
+                break;
         }
-        return this.appName;
+
+
+        if (usageCount > 9) {
+            nmColor = "#DFDFDF";
+            name = "<b>" + name + "</b>";
+            ucString = "+";
+        }
+        else {
+            ucString = Integer.toString(usageCount);
+        }
+
+
+        return "<font color=" + nmColor + ">" + name + "</font> <small><font color=" + ucColor + ">(" + ucString + ")</font>" + "<font color=" + ifColor + ">" + info + "</font></small>";
     }
 
     public String[] getLaunchArgs(){

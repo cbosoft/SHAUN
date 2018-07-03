@@ -81,9 +81,10 @@ public class Home extends Activity {
         AppFetcher() { }
 
         public void run() {
-	    appsReady = Boolean.FALSE;
+	        appsReady = Boolean.FALSE;
             setupAppMaps();
-	    appsReady = Boolean.TRUE;
+	        appsReady = Boolean.TRUE;
+
         }
     }
 

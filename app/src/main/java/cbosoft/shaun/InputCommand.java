@@ -81,7 +81,9 @@ public class InputCommand {
                 break;
             case BUILTIN:
                 name = this.usageString;
-                info += "[SH]";
+		name = name.replace("<", "&#060;");
+		name = name.replace(">", "&#062;");
+                info += "[SHBI]";
                 break;
             case ANDROID:
                 info += "[APK]";

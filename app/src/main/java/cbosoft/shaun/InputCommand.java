@@ -57,10 +57,10 @@ public class InputCommand {
 
         int res = FuzzySearch.ratio(appName, input);
 
-        if (appName.startsWith(input)) res += 50; // prefer apps which match input
-        if (this.needsArgs && appName.startsWith(input.split(" ")[0])) res += 50; // to offset the lack of fuzzy matching otherwise
-        if (this.appType == AppType.ALIAS) res += 25; // prefer alias, if not already matching
-        if (res < 50) return 0;
+        if (inputRegex.startsWith(input)) res += 50; // prefer apps which match input
+        if (this.needsArgs && inputRegex.startsWith(input.split(" ")[0])) res += 50; // to offset the lack of fuzzy matching otherwise
+        if (this.appType == AppType.ALIAS && res > 0) res += 25; // prefer alias, if its a possibility
+        if (res < 50) return 0; // lose low-quality matches
 
         return res;
     }

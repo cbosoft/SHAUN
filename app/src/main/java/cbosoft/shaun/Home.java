@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 import static android.content.ContentValues.TAG;
+import static java.lang.Thread.sleep;
 
 public class Home extends Activity {
 
@@ -278,7 +279,7 @@ public class Home extends Activity {
 
     void inputTextChanged(CharSequence s, int start, int before, int count) {
         suggestApps("");
-        if (!appsReady) return;
+        //if (!appsReady) return;
         
         if (s.length() < 1) {
             // somehow, there are no contents in the stdin buffer...
@@ -292,7 +293,7 @@ public class Home extends Activity {
         }
 
         if (count < before){
-            suggestApps(s.toString().substring(shPrompt.length()));
+            if (appsReady) suggestApps(s.toString().substring(shPrompt.length()));
             // otherwise deleting chars is fine...
             return;
         }
@@ -315,7 +316,7 @@ public class Home extends Activity {
             }
         }
         else {
-            suggestApps(s.toString().substring(shPrompt.length()));
+            if (appsReady) suggestApps(s.toString().substring(shPrompt.length()));
         }
     }
 
@@ -352,7 +353,17 @@ public class Home extends Activity {
         return (InputCommand)likelihoods.get(0).get(1);
     }
 
+    void waitForApps() {
+	    while (!appsReady) {
+	        try {
+                sleep(100);
+            }
+            catch (InterruptedException ex) { /* Pass */ }
+	    }
+    }
+
     void launch(String input) {
+	    waitForApps();
         try {
             launch(getCommand(input));
         }
@@ -366,6 +377,7 @@ public class Home extends Activity {
         /*
          * Given an input string, determines how to launch it, then does that
          * */
+	    waitForApps();
         setStdin(shPrompt);
         appUsage.put(ic.appName, appUsage.get(ic.appName) + 1);
 
@@ -473,6 +485,11 @@ public class Home extends Activity {
         suggestionList = new ArrayList<>();
         for (List<Object> tu: likelihoods){
             suggestionList.add((InputCommand)tu.get(1));
+        }
+
+        if (suggestionList.size() == 0) {
+            shSuggested.setText(Html.fromHtml("<font color=\"#dfdfdf\"><b>No results returned.</b></font>", 0));
+            return;
         }
 
         // display

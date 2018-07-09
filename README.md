@@ -27,10 +27,17 @@ Me, mostly. Or anyone who doesn't mess about with fancy app drawers and complica
   * Launching of apps (with suggestions and auto-completion)
     * Completions appear above the prompt, press enter to launch the most similar option
     * Frequently used applications are given priority in completion list
+  * Definable Aliases: custom names can be set for other commands, in a file `aliases.json`
+    * For example, you can define a shortcut to access a website:
+    ```JSON
+    {
+      "gg":"url https://www.google.co.uk"
+    }
+    ```
+    for quicker access to your favourite websites!
   
 <h4 align="center">Upcoming</h4>
 
-  * Custom definable command aliases
   * Theming
 
 <h1 align="center">Install</h1>

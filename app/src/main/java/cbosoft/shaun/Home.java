@@ -1,5 +1,6 @@
 package cbosoft.shaun;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -10,8 +11,9 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Vibrator;
-import android.renderscript.ScriptGroup;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.text.Editable;
 import android.text.Html;
 import android.text.TextWatcher;
@@ -21,14 +23,22 @@ import android.widget.TextView;
 import android.view.View;
 import android.widget.TextClock;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import static android.content.ContentValues.TAG;
+import static android.os.Environment.getExternalStorageDirectory;
 import static java.lang.Thread.sleep;
 
 public class Home extends Activity {
@@ -100,7 +110,6 @@ public class Home extends Activity {
         setContentView(R.layout.rootlayout);
         this.hideStatusBar();
 
-
         setupPreferences();
         setupLayout();
 
@@ -133,12 +142,28 @@ public class Home extends Activity {
         shPrefEditor = null;
     }
 
+//    @Override
+//    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+//        if(grantResults[0]== PackageManager.PERMISSION_GRANTED){
+//            Log.v(TAG,"Permission: "+permissions[0]+ "was "+grantResults[0]);
+//            //resume tasks needing this permission
+//        }
+//    }
+
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(grantResults[0]== PackageManager.PERMISSION_GRANTED){
-            Log.v(TAG,"Permission: "+permissions[0]+ "was "+grantResults[0]);
-            //resume tasks needing this permission
+    public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case 1223: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    initAliasFile();
+                }
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request.
         }
     }
 
@@ -221,11 +246,7 @@ public class Home extends Activity {
         );
 
         //aliases
-        commandList.add(new InputCommand("google play store", "play"));
-        commandList.add(new InputCommand("amazon shopping", "amz"));
-        commandList.add(new InputCommand("file manager", "fm"));
-        commandList.add(new InputCommand("url https://www.reddit.com/r/ukpolitics", "ukp"));
-        commandList.add(new InputCommand("blackberry camera", "cam"));
+        setupAliases();
 
         //android
         appUsage = new HashMap<>();
@@ -245,6 +266,74 @@ public class Home extends Activity {
 
         for (InputCommand ic : commandList) {
             appUsage.put(ic.appName, shPref.getInt(ic.appName, 0));
+        }
+    }
+
+    void setupAliases() {
+        // if Aliases file exists,
+        // read it and create aliases
+
+//        commandList.add(new InputCommand("google play store", "play"));
+//        commandList.add(new InputCommand("amazon shopping", "amz"));
+//        commandList.add(new InputCommand("file manager", "fm"));
+//        commandList.add(new InputCommand("url https://www.reddit.com/r/ukpolitics", "ukp"));
+//        commandList.add(new InputCommand("blackberry camera", "cam"));
+
+        String aliasPath = getExternalStorageDirectory() + "/aliases.json";
+
+        Log.d(TAG, "setupAliases: " + aliasPath);
+
+        File aliasFile = new File(aliasPath);
+        if (aliasFile.exists()) {
+            // read file
+            Log.d(TAG, "setupAliases: READING ALIAS FILE");
+            try {
+                FileReader fr = new FileReader(aliasFile);
+                BufferedReader br = new BufferedReader(fr);
+                String line;
+                StringBuilder sb = new StringBuilder();
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                JSONObject jo = new JSONObject(sb.toString());
+                Iterator<String> keys = jo.keys();
+                while(keys.hasNext()) {
+                    String aliasName = keys.next();
+                    String appName = jo.getString(aliasName);
+                    commandList.add(new InputCommand(appName, aliasName));
+                    Log.d(TAG, "setupAliases: ADDED ALIAS <" + aliasName + "> for app <" + appName +">");
+                }
+            } catch (Exception e) {
+                // file not found, probably
+                Log.d(TAG, "setupAliases: " + e.getMessage());
+                alert();
+            }
+        }
+        else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        1223);
+            }
+            else {
+                initAliasFile();
+            }
+        }
+    }
+
+    void initAliasFile() {
+        try {
+            PrintWriter pw = new PrintWriter(getExternalStorageDirectory() + "/aliases.json");
+            pw.write("{\n" +
+                    "\t\"play\":\"google play store\"\n" +
+                    "\t\"amz\":\"amazon shopping\"\n" +
+                    "}");
+            pw.close();
+            Log.d(TAG, "initAliasFile: ALIAS FILE INITIALISED");
+        } catch (Exception ex) {
+            Log.d(TAG, "initAliasFile: ALIAS FILE NOT INITIALISED:");
+            Log.d(TAG, "initAliasFile: " + ex.getMessage());
         }
     }
 
@@ -514,10 +603,10 @@ public class Home extends Activity {
         return shprompt;
     }
 
-    public String getUserInput() {
-        String fullString = shSTDIN.getText().toString();
-        return fullString.substring(getPrompt().length());
-    }
+//    public String getUserInput() {
+//        String fullString = shSTDIN.getText().toString();
+//        return fullString.substring(getPrompt().length());
+//    }
 
     public void resetStdin(){
         this.shSTDIN.setText(shPrompt, TextView.BufferType.EDITABLE);
@@ -595,7 +684,6 @@ public class Home extends Activity {
     void shb_apmud() {
         AppFetcher appFetcher = new AppFetcher();
         appFetcher.start();
-
     }
 
 }

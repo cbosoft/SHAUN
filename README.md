@@ -1,8 +1,5 @@
 <h1 align="center">SHAUN</h1>
 <p align="center"><b>SH</b>ell l<b>AUN</b>cher</p>
-<p align="center">
-  <img src="screenshots/main.png" />
-</p>
 
 <h4 align="center">What is it?</h4>
 

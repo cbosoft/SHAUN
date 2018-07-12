@@ -1,10 +1,10 @@
-<h1 align="center">SHAUN</h1>
+# SHAUN
 
-<h4 align="center">What is it?</h4>
+## What is it?
 
 A minimal Android launcher consisting of an auto-completing application search+launch field... simmilar to a command shell.
 
-<h4 align="center">Why?</h4>
+## Why?
 
 It's faster.
 
@@ -14,11 +14,11 @@ Chrome is maybe a bad example, most people have their web browser as a shortcut 
 
 What about the lesser used applications? What about Messenger? Sure, you have a shortcut for that. Whatsapp too? What about SMS? That's a lot of messaging apps! What about Facebook? And Twitter? And Instagram? All on there? Jeez, that home screen is getting cluttered! This is where the power of the prompt comes in. From the prompt, a few key presses is all it takes to launch to get to your favourite apps!
 
-<h4 align="center">Who is this for?</h4>
+## Who is this for?
 
 Me, mostly. Or anyone who doesn't mess about with fancy app drawers and complicated gestures to get to their apps. Someone who wants to get things done with a minimum of fuss, but with a modicum of elegance and retro style. It is also made with the shell geek in mind. Do you feel uncomfortable away from a VT102? Not to fear, SHAUN is here!
 
-<h1 align="center">Features</h1>
+# Features
 
   * Launching of apps (with suggestions and auto-completion)
     * Completions appear above the prompt, press enter to launch the most similar option
@@ -32,11 +32,11 @@ Me, mostly. Or anyone who doesn't mess about with fancy app drawers and complica
     ```
     for quicker access to your favourite websites!
   
-<h4 align="center">Upcoming</h4>
+# Upcoming
 
   * Theming
 
-<h1 align="center">Install</h1>
+# Install
 
 If you want to install the launcher download this repo, build the source, and transfer the APK to your phone.
 
@@ -46,17 +46,17 @@ Running
 ```
 should be sufficient to get a working .apk in the `app/build/outputs/apk/debug/` folder.
 
-<h1 align="center">Licence Stuff</h1>
+# Licence Stuff
 
 SHAUN itself is GPL 3.0, and uses content as follows:
 
-<h4 align="center"> Fonts </h4>
+## Fonts
 
   * [DOS VGA 437](https://www.dafont.com/perfect-dos-vga-437.font) - Free
   * [Runescape UF](https://www.dafont.com/runescape-uf.font) - GPL/Public Domain (unclear)
   * [Inconsolata](https://levien.com/type/myfonts/inconsolata.html) - SIL Open Font License
   * [Drucifer](https://github.com/drucifer/drucifer-monospace) - SIL Open Font License
 
-<h4 align="center"> Libraries </h4>
+## Libraries
 
   * [FuzzyWuzzy](https://github.com/xdrop/fuzzywuzzy) - MIT License
